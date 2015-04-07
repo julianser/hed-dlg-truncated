@@ -556,17 +556,10 @@ class DialogEncoderDecoder(Model):
             sen.append(self.idx_to_str[seq[k]])
         return sen
 
-    def words_to_indices(self, seq, add_se=True):
+    def words_to_indices(self, seq):
         sen = []
         for k in range(len(seq)):
             sen.append(self.str_to_idx.get(seq[k], self.unk_sym))
-
-        if add_se and len(sen) > 0 \
-           and (sen[0] != self.sos_sym or sen[-1] != self.eos_sym):
-            if sen[0] != self.sos_sym:
-                sen = [self.sos_sym] + sen
-            if sen[-1] != self.eos_sym:
-                sen = sen + [self.eos_sym]
         return sen
 
     def compute_updates(self, training_cost, params):
