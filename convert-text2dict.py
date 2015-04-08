@@ -53,7 +53,6 @@ if args.dict != "":
     assert '<unk>' in vocab
     assert '<s>' in vocab
     assert '</s>' in vocab
-    assert '</t>' in vocab
 else:
     word_counter = Counter()
 
@@ -71,9 +70,9 @@ else:
         vocab_count = word_counter.most_common()
 
     # Add special tokens to the vocabulary
-    vocab = {'<unk>': 0, '<s>': 1, '</s>': 2, '</t>': 3}
+    vocab = {'<unk>': 0, '<s>': 1, '</s>': 2}
     for i, (word, count) in enumerate(vocab_count):
-        vocab[word] = i + 4
+        vocab[word] = i + 3
 
 logger.info("Vocab size %d" % len(vocab))
 
@@ -112,11 +111,6 @@ for line, triple in enumerate(open(args.input, 'r')):
             freqs[2] += 1
 
     if len(triple_lst) == 3:
-        # Push the end-of-triple triple
-        # <s> </t>   
-        triple_lst.append([1, 3]) 
-        freqs[3] += 1
-
         # Flatten out binarized triple
         # [[a, b, c], [c, d, e]] -> [a, b, c, d, e]
         binarized_triple = list(itertools.chain(*triple_lst)) 
