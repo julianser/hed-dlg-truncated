@@ -634,19 +634,15 @@ class DialogEncoderDecoder(Model):
                                             outputs=self.softmax_cost, name="eval_fn")
         return self.eval_fn
 
-    def build_grab_selective_function(self):
-        if not self.decoder_bias_type == 'selective':
-            raise AttributeError('To compile this function the model should be trained with selective bias')
-
-        if not hasattr(self, 'grab_sel_fn'):
+    def build_get_states_function(self):
+        if not hasattr(self, 'get_states_fn'):
             # Compile functions
             logger.debug("Building selective function")
-            self.grab_sel_fn = theano.function(inputs=[self.x_data, self.x_max_length, self.x_cost_mask],
-                                            outputs=[self.softmax_cost, 
-                                                     self.decoder_states[1],  # Selective hs
-                                                     self.decoder_states[2]], # Selective hs mask 
-                                                     name="grab_sel_fn")
-        return self.grab_sel_fn
+            
+            outputs = [self.h, self.hs, self.hd] + [x for x in self.decoder_states]
+            self.get_states_fn = theano.function(inputs=[self.x_data, self.x_max_length],
+                                            outputs=outputs, name="get_states_fn")
+        return self.get_states_fn
 
     def build_sampling_function(self):
         if not hasattr(self, 'sample_fn'):
@@ -658,8 +654,7 @@ class DialogEncoderDecoder(Model):
     def build_next_probs_function(self):
         if not hasattr(self, 'next_probs_fn'):
             outputs, hd = self.decoder.build_next_probs_predictor(self.beam_hs, self.beam_source, prev_hd=self.beam_hd)
-            self.next_probs_fn = theano.function(
-                inputs=[self.beam_hs, self.beam_source, self.beam_hd],
+            self.next_probs_fn = theano.function(inputs=[self.beam_hs, self.beam_source, self.beam_hd],
                 outputs=[outputs, hd],
                 name="next_probs_fn")
         return self.next_probs_fn
@@ -731,13 +726,13 @@ class DialogEncoderDecoder(Model):
             logger.debug("Decoder bias type {}".format(self.decoder_bias_type))
 
         logger.debug("Build encoder")
-        h, hs = self.encoder.build_encoder(training_x, xmask=training_hs_mask)
+        self.h, self.hs = self.encoder.build_encoder(training_x, xmask=training_hs_mask)
         
         logger.debug("Build decoder (NCE)")
-        contrastive_cost, hdn = self.decoder.build_decoder(hs, training_x, y_neg=self.y_neg, y=training_y, xmask=training_hs_mask, mode=Decoder.NCE)
+        contrastive_cost, self.hd_nce = self.decoder.build_decoder(self.hs, training_x, y_neg=self.y_neg, y=training_y, xmask=training_hs_mask, mode=Decoder.NCE)
         
         logger.debug("Build decoder (EVAL)")
-        target_probs, hd, self.decoder_states = self.decoder.build_decoder(hs, training_x, xmask=training_hs_mask, y=training_y, mode=Decoder.EVALUATION)
+        target_probs, self.hd, self.decoder_states = self.decoder.build_decoder(self.hs, training_x, xmask=training_hs_mask, y=training_y, mode=Decoder.EVALUATION)
          
         # Prediction cost and rank cost
         self.contrastive_cost = T.sum(contrastive_cost.flatten() * training_x_cost_mask)
