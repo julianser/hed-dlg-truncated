@@ -58,7 +58,9 @@ class Encoder(EncoderDecoderBase):
             self.W_in_z = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='W_in_z'))
             self.W_hh_r = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='W_hh_r'))
             self.W_hh_z = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='W_hh_z'))
-    
+            self.b_z = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='b_z'))
+            self.b_r = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='b_r'))
+
         """ Context weights """
         self.Ws_in = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim, self.sdim), name='Ws_in'))
         self.Ws_hh = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.sdim, self.sdim), name='Ws_hh'))
@@ -69,7 +71,9 @@ class Encoder(EncoderDecoderBase):
             self.Ws_in_z = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim, self.sdim), name='Ws_in_z'))
             self.Ws_hh_r = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.sdim, self.sdim), name='Ws_hh_r'))
             self.Ws_hh_z = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.sdim, self.sdim), name='Ws_hh_z'))
-    
+            self.bs_z = add_to_params(self.params, theano.shared(value=np.zeros((self.sdim,), dtype='float32'), name='bs_z'))
+            self.bs_r = add_to_params(self.params, theano.shared(value=np.zeros((self.sdim,), dtype='float32'), name='bs_r'))
+
     def plain_sent_step(self, x_t, m_t, h_tm1):
         if m_t.ndim >= 1:
             m_t = m_t.dimshuffle(0, 'x')
@@ -84,8 +88,8 @@ class Encoder(EncoderDecoderBase):
          
         hr_tm1 = m_t * h_tm1
          
-        r_t = T.nnet.sigmoid(T.dot(x_t, self.W_in_r) + T.dot(hr_tm1, self.W_hh_r))
-        z_t = T.nnet.sigmoid(T.dot(x_t, self.W_in_z) + T.dot(hr_tm1, self.W_hh_z))
+        r_t = T.nnet.sigmoid(T.dot(x_t, self.W_in_r) + T.dot(hr_tm1, self.W_hh_r) + self.b_r)
+        z_t = T.nnet.sigmoid(T.dot(x_t, self.W_in_z) + T.dot(hr_tm1, self.W_hh_z) + self.b_z)
         h_tilde = self.sent_rec_activation(T.dot(x_t, self.W_in) + T.dot(r_t * hr_tm1, self.W_hh) + self.b_hh)
         h_t = (np.float32(1.0) - z_t) * hr_tm1 + z_t * h_tilde
          
@@ -101,8 +105,8 @@ class Encoder(EncoderDecoderBase):
         return hs_t
 
     def gated_triple_step(self, h_t, m_t, hs_tm1):
-        rs_t = T.nnet.sigmoid(T.dot(h_t, self.Ws_in_r) + T.dot(hs_tm1, self.Ws_hh_r))
-        zs_t = T.nnet.sigmoid(T.dot(h_t, self.Ws_in_z) + T.dot(hs_tm1, self.Ws_hh_z))
+        rs_t = T.nnet.sigmoid(T.dot(h_t, self.Ws_in_r) + T.dot(hs_tm1, self.Ws_hh_r) + self.bs_r)
+        zs_t = T.nnet.sigmoid(T.dot(h_t, self.Ws_in_z) + T.dot(hs_tm1, self.Ws_hh_z) + self.bs_z)
         hs_tilde = self.triple_rec_activation(T.dot(h_t, self.Ws_in) + T.dot(rs_t * hs_tm1, self.Ws_hh) + self.bs_hh)
         hs_update = (np.float32(1.) - zs_t) * hs_tm1 + zs_t * hs_tilde
          
@@ -227,25 +231,37 @@ class Decoder(EncoderDecoderBase):
         self.Wd_hh = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='Wd_hh'))
         self.bd_hh = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='bd_hh'))
         self.Wd_in = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='Wd_in')) 
-        self.Wd_s_q = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.sdim, self.qdim), name='Wd_s_q'))
-        
+        self.Wd_s_0 = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.sdim, self.qdim), name='Wd_s_0'))
+        self.bd_s_0 = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='bd_s_0'))
+
         if self.sent_step_type == "gated":
             self.Wd_in_r = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='Wd_in_r'))
             self.Wd_in_z = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='Wd_in_z'))
             self.Wd_hh_r = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='Wd_hh_r'))
             self.Wd_hh_z = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='Wd_hh_z'))
-            
+            self.bd_r = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='bd_r'))
+            self.bd_z = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='bd_z'))
+        
             if self.decoder_bias_type == 'all':
+                self.Wd_s_q = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.sdim, self.qdim), name='Wd_s_q'))
                 self.Wd_s_z = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.sdim, self.qdim), name='Wd_s_z'))
-                self.Wd_s_r = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.sdim, self.qdim), name='Wd_s_r'))
-                
+                self.Wd_s_r = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.sdim, self.qdim), name='Wd_s_r')) 
+
         if self.decoder_bias_type == 'selective':
+            self.bd_sel = add_to_params(self.params, theano.shared(value=np.zeros((self.sdim,), dtype='float32'), name='bd_sel'))
+            self.Wd_s_q = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.sdim, self.qdim), name='Wd_s_q'))
             # s -> g_r
-            self.Wd_sel_s = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.sdim, self.sdim), name='Wd_sel_s'))
+            self.Wd_sel_s = add_to_params(self.params, \
+                                          theano.shared(value=NormalInit(self.rng, self.sdim, self.sdim), \
+                                                        name='Wd_sel_s'))
             # x_{n-1} -> g_r
-            self.Wd_sel_e = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.sdim), name='Wd_sel_e'))
+            self.Wd_sel_e = add_to_params(self.params, \
+                                          theano.shared(value=NormalInit(self.rng, self.rankdim, self.sdim), \
+                                                        name='Wd_sel_e'))
             # h_{n-1} -> g_r
-            self.Wd_sel_h = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim, self.sdim), name='Wd_sel_h'))
+            self.Wd_sel_h = add_to_params(self.params, \
+                                          theano.shared(value=NormalInit(self.rng, self.qdim, self.sdim), \
+                                                        name='Wd_sel_h'))
          
         ######################   
         # Output layer weights
@@ -351,16 +367,14 @@ class Decoder(EncoderDecoderBase):
 
         if self.sent_step_type == "gated":
             f_dec = self.gated_step
-            o_dec_info = [hd_init, None, None, None] 
-             
+            o_dec_info = [hd_init, None, None, None]
             if self.decoder_bias_type == "selective":
-                o_dec_info += [None]
+                o_dec_info += [None, None]
         else:
             f_dec = self.plain_step
             o_dec_info = [hd_init]
-
             if self.decoder_bias_type == "selective":
-                o_dec_info += [None] # TODO
+                o_dec_info += [None, None] 
          
         # If the mode of the decoder is EVALUATION
         # then we evaluate by default all the sentence
@@ -382,21 +396,21 @@ class Decoder(EncoderDecoderBase):
         
         # if we are using selective bias, we should update our hs
         # to the step-selective hs
+        step_hs = hs
         if self.decoder_bias_type == "selective":
-            hs = _res[1]
-        
-        pre_activ = self.build_output_layer(hs, xd, hd)
+            step_hs = _res[1]
+        pre_activ = self.build_output_layer(step_hs, xd, hd)
 
         # EVALUATION  : Return target_probs + all the predicted ranks
         # target_probs.ndim == 3
         if mode == Decoder.EVALUATION:
             target_probs = GrabProbs(self.output_softmax(pre_activ), y)
-            return target_probs, hd, hs
+            return target_probs, hd, _res 
         elif mode == Decoder.NCE:
-            return self.output_nce(pre_activ, y, y_neg), hd, hs
+            return self.output_nce(pre_activ, y, y_neg), hd
         # BEAM_SEARCH : Return output (the softmax layer) + the new hidden states
         elif mode == Decoder.BEAM_SEARCH:
-            return self.output_softmax(pre_activ), hd, hs
+            return self.output_softmax(pre_activ), hd
         # SAMPLING    : Return a vector of n_sample from the output layer 
         #                 + log probabilities + the new hidden states
         elif mode == Decoder.SAMPLING:
@@ -407,7 +421,7 @@ class Decoder(EncoderDecoderBase):
             if outputs.ndim == 1:
                 sample = sample[0] 
             log_prob = -T.log(T.diag(outputs.T[sample])) 
-            return sample, log_prob, hd, hs
+            return sample, log_prob, hd
     
     def sampling_step(self, *args): 
         args = iter(args)
@@ -441,7 +455,7 @@ class Decoder(EncoderDecoderBase):
         assert hs.ndim == 2
          
         # ...and decode one step.
-        sample, log_prob, hd, _ = self.build_decoder(hs, prev_word, prev_hd=prev_hd, step_num=step_num, mode=Decoder.SAMPLING)
+        sample, log_prob, hd = self.build_decoder(hs, prev_word, prev_hd=prev_hd, step_num=step_num, mode=Decoder.SAMPLING)
         
         assert sample.ndim == 1
         assert log_prob.ndim == 1
@@ -473,27 +487,27 @@ class Decoder(EncoderDecoderBase):
         if m_t.ndim >= 1:
             m_t = m_t.dimshuffle(0, 'x')
          
-        hd_tm1 = (m_t) * hd_tm1
-        # ^ iff x_{t - 1} = </s> (m_t = 0) then x_{t-1} = 0
-        # and hd_{t - 1} = 0 else hd_{t - 1} is left unchanged (m_t = 1)
+        hd_tm1 = (m_t) * hd_tm1 + (1 - m_t) * T.tanh(T.dot(hs_t, self.Wd_s_0) + self.bd_s_0) 
+        # ^ iff x_{t - 1} = </s> (m_t = 0) then x_{t - 1} = 0
+        # and hd_{t - 1} = tanh(W_s_0 hs_t + bd_s_0) else hd_{t - 1} is left unchanged (m_t = 1)
          
         if self.decoder_bias_type == 'selective':
-            rd_sel_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_sel_e) + T.dot(hd_tm1, self.Wd_sel_h) + T.dot(hs_t, self.Wd_sel_s))
+            rd_sel_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_sel_e) + T.dot(hd_tm1, self.Wd_sel_h) + T.dot(hs_t, self.Wd_sel_s) + self.bd_sel)
             hsr_t = rd_sel_t * hs_t
              
-            rd_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_in_r) + T.dot(hd_tm1, self.Wd_hh_r))
-            zd_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_in_z) + T.dot(hd_tm1, self.Wd_hh_z))
+            rd_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_in_r) + T.dot(hd_tm1, self.Wd_hh_r) + self.bd_r)
+            zd_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_in_z) + T.dot(hd_tm1, self.Wd_hh_z) + self.bd_z)
             hd_tilde = self.sent_rec_activation(T.dot(xd_t, self.Wd_in) \
                                         + T.dot(rd_t * hd_tm1, self.Wd_hh) \
                                         + T.dot(hsr_t, self.Wd_s_q) \
                                         + self.bd_hh)
              
             hd_t = (np.float32(1.) - zd_t) * hd_tm1 + zd_t * hd_tilde 
-            output = (hd_t, hsr_t, rd_t, zd_t, hd_tilde)
+            output = (hd_t, hsr_t, rd_sel_t, rd_t, zd_t, hd_tilde)
                  
         elif self.decoder_bias_type == 'all':
-            rd_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_in_r) + T.dot(hd_tm1, self.Wd_hh_r) + T.dot(hs_t, self.Wd_s_r))
-            zd_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_in_z) + T.dot(hd_tm1, self.Wd_hh_z) + T.dot(hs_t, self.Wd_s_z))
+            rd_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_in_r) + T.dot(hd_tm1, self.Wd_hh_r) + T.dot(hs_t, self.Wd_s_r) + self.bd_r)
+            zd_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_in_z) + T.dot(hd_tm1, self.Wd_hh_z) + T.dot(hs_t, self.Wd_s_z) + self.bd_z)
             hd_tilde = self.sent_rec_activation(T.dot(xd_t, self.Wd_in) \
                                         + T.dot(rd_t * hd_tm1, self.Wd_hh) \
                                         + T.dot(hs_t, self.Wd_s_q) \
@@ -503,16 +517,13 @@ class Decoder(EncoderDecoderBase):
                  
         else:
             # Do not bias all the decoder (force to store very useful information in the first state)
-            hd_tm1 += (1 - m_t) * T.tanh(T.dot(hs_t, self.Wd_s_q) + self.bd_hh)
-            # ^ iff xd_t = </q> (m_t = 0) then hd_tm1n = init_state
-            rd_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_in_r) + T.dot(hd_tm1, self.Wd_hh_r))
-            zd_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_in_z) + T.dot(hd_tm1, self.Wd_hh_z))
+            rd_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_in_r) + T.dot(hd_tm1, self.Wd_hh_r) + self.bd_r)
+            zd_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_in_z) + T.dot(hd_tm1, self.Wd_hh_z) + self.bd_z)
             hd_tilde = self.sent_rec_activation(T.dot(xd_t, self.Wd_in) \
                                         + T.dot(rd_t * hd_tm1, self.Wd_hh) \
                                         + self.bd_hh) 
             hd_t = (np.float32(1.) - zd_t) * hd_tm1 + zd_t * hd_tilde
             output = (hd_t, rd_t, zd_t, hd_tilde)
-        
         return output
     
     def plain_step(self, xd_t, m_t, hs_t, hd_tm1):
@@ -520,30 +531,33 @@ class Decoder(EncoderDecoderBase):
             m_t = m_t.dimshuffle(0, 'x')
         
         # We already assume that xd are zeroed out
-        hd_tm1 = (m_t) * hd_tm1
+        hd_tm1 = (m_t) * hd_tm1 + (1-m_t) * T.tanh(T.dot(hs_t, self.Wd_s_0) + self.bd_s_0)
         # ^ iff x_{t - 1} = </s> (m_t = 0) then x_{t-1} = 0
         # and hd_{t - 1} = 0 else hd_{t - 1} is left unchanged (m_t = 1)
 
         if self.decoder_bias_type == 'first':
             # Do not bias all the decoder (force to store very useful information in the first state) 
-            hd_tm1 += (1 - m_t) * T.tanh(T.dot(hs_t, self.Wd_s_q) + self.bd_hh)
             hd_t = self.sent_rec_activation( T.dot(xd_t, self.Wd_in) \
                                              + T.dot(hd_tm1, self.Wd_hh) \
                                              + self.bd_hh )
+            output = (hd_t,)
         elif self.decoder_bias_type == 'all':
             hd_t = self.sent_rec_activation( T.dot(xd_t, self.Wd_in) \
                                              + T.dot(hd_tm1, self.Wd_hh) \
                                              + T.dot(hs_t, self.Wd_s_q) \
                                              + self.bd_hh )
+            output = (hd_t,)
         elif self.decoder_bias_type == 'selective':
-            rd_sel_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_sel_e) + T.dot(hd_tm1, self.Wd_sel_h) + T.dot(hs_t, self.Wd_sel_s))
+            rd_sel_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_sel_e) + T.dot(hd_tm1, self.Wd_sel_h) + T.dot(hs_t, self.Wd_sel_s) + self.bd_sel)
             hsr_t = rd_sel_t * hs_t
              
             hd_tilde = self.sent_rec_activation( T.dot(xd_t, self.Wd_in) \
                                         + T.dot(hd_tm1, self.Wd_hh) \
                                         + T.dot(hsr_t, self.Wd_s_q) \
                                         + self.bd_hh )
-        return hd_t
+            output = (hd_t, hsr_t, rd_sel_t)
+
+        return output
     ####
 
 class DialogEncoderDecoder(Model):
@@ -621,14 +635,17 @@ class DialogEncoderDecoder(Model):
         return self.eval_fn
 
     def build_grab_selective_function(self):
-        if not self.state['decoder_bias_type'] == 'selective':
-            raise AttributeError('This model should be trained with selective decoder bias!')
+        if not self.decoder_bias_type == 'selective':
+            raise AttributeError('To compile this function the model should be trained with selective bias')
 
         if not hasattr(self, 'grab_sel_fn'):
             # Compile functions
             logger.debug("Building selective function")
             self.grab_sel_fn = theano.function(inputs=[self.x_data, self.x_max_length, self.x_cost_mask],
-                                            outputs=[self.softmax_cost, self.hs], name="grab_sel_fn")
+                                            outputs=[self.softmax_cost, 
+                                                     self.decoder_states[1],  # Selective hs
+                                                     self.decoder_states[2]], # Selective hs mask 
+                                                     name="grab_sel_fn")
         return self.grab_sel_fn
 
     def build_sampling_function(self):
@@ -640,7 +657,7 @@ class DialogEncoderDecoder(Model):
 
     def build_next_probs_function(self):
         if not hasattr(self, 'next_probs_fn'):
-            outputs, hd, hs = self.decoder.build_next_probs_predictor(self.beam_hs, self.beam_source, prev_hd=self.beam_hd)
+            outputs, hd = self.decoder.build_next_probs_predictor(self.beam_hs, self.beam_source, prev_hd=self.beam_hd)
             self.next_probs_fn = theano.function(
                 inputs=[self.beam_hs, self.beam_source, self.beam_hd],
                 outputs=[outputs, hd],
@@ -709,14 +726,18 @@ class DialogEncoderDecoder(Model):
         training_hs_mask = T.neq(training_x, self.eos_sym)
         training_x_cost_mask = self.x_cost_mask[:self.x_max_length].flatten()
         
+        # Backward compatibility
+        if 'decoder_bias_type' in self.state:
+            logger.debug("Decoder bias type {}".format(self.decoder_bias_type))
+
         logger.debug("Build encoder")
         h, hs = self.encoder.build_encoder(training_x, xmask=training_hs_mask)
         
         logger.debug("Build decoder (NCE)")
-        contrastive_cost, hdn, hsn = self.decoder.build_decoder(hs, training_x, y_neg=self.y_neg, y=training_y, xmask=training_hs_mask, mode=Decoder.NCE)
+        contrastive_cost, hdn = self.decoder.build_decoder(hs, training_x, y_neg=self.y_neg, y=training_y, xmask=training_hs_mask, mode=Decoder.NCE)
         
         logger.debug("Build decoder (EVAL)")
-        target_probs, hd, hs = self.decoder.build_decoder(hs, training_x, xmask=training_hs_mask, y=training_y, mode=Decoder.EVALUATION)
+        target_probs, hd, self.decoder_states = self.decoder.build_decoder(hs, training_x, xmask=training_hs_mask, y=training_y, mode=Decoder.EVALUATION)
          
         # Prediction cost and rank cost
         self.contrastive_cost = T.sum(contrastive_cost.flatten() * training_x_cost_mask)
