@@ -33,7 +33,6 @@ class BeamSearch(object):
         state = self.model.state 
         self.unk_sym = self.model.unk_sym
         self.eos_sym = self.model.eos_sym
-        self.eot_sym = self.model.eot_sym
         self.qdim = self.model.qdim
         self.sdim = self.model.sdim
 
@@ -91,7 +90,6 @@ class BeamSearch(object):
 
             if k < minlen:
                 log_probs[:, self.eos_sym] = -numpy.inf
-                log_probs[:, self.eot_sym] = -numpy.inf 
 
             # Find the best options by calling argpartition of flatten array
             next_costs = numpy.array(costs)[:, None] - log_probs
