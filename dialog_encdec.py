@@ -564,8 +564,6 @@ class DialogEncoderDecoder(Model):
     def indices_to_words(self, seq):
         sen = []
         for k in range(len(seq)):
-            if seq[k] == self.eot_sym:
-                break
             sen.append(self.idx_to_str[seq[k]])
         return sen
 
