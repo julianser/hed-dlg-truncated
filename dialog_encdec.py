@@ -688,7 +688,7 @@ class DialogEncoderDecoder(Model):
         self.idx_to_str = dict([(tok_id, tok) for tok, tok_id, freq in raw_dict])
 
         if '</s>' not in self.str_to_idx \
-           or '</t>' not in self.str_to_idx:
+           or '<s>' not in self.str_to_idx:
                 raise Exception("Error, malformed dictionary!")
          
         # Number of words in the dictionary 
