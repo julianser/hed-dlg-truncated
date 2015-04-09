@@ -89,8 +89,9 @@ def main(args):
     logger.debug("State:\n{}".format(pprint.pformat(state)))
     logger.debug("Timings:\n{}".format(pprint.pformat(timings)))
     
-    model = DialogEncoderDecoder(state)
-
+    rng = numpy.random.RandomState(state['seed'])
+    
+    model = DialogEncoderDecoder(rng, state)
     if args.resume != "":
         filename = args.resume + '_model.npz'
         if os.path.isfile(filename):
@@ -118,7 +119,7 @@ def main(args):
     logger.debug("Load data")
     train_data, \
     valid_data, \
-    test_data = get_batch_iterator(state)
+    test_data = get_batch_iterator(rng, state)
     
     train_data.start()
 
@@ -159,7 +160,7 @@ def main(args):
         x_cost_mask = batch['x_mask']
         
         if state['use_nce']:
-            y_neg = model.rng.choice(size=(10, max_length, x_data.shape[1]), a=model.idim, p=model.noise_probs).astype('int32')
+            y_neg = rng.choice(size=(10, max_length, x_data.shape[1]), a=model.idim, p=model.noise_probs).astype('int32')
             c = train_batch(x_data, y_neg, max_length, x_cost_mask)
         else:
             c = train_batch(x_data, max_length, x_cost_mask)
