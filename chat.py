@@ -101,7 +101,7 @@ def main():
     while (True):
        var = raw_input("User - ")
 
-       while len(utterances) > 0:
+       while len(utterances) > 2:
            utterances.popleft()
          
        current_utterance = [ model.start_sym_sentence ] + var.split() + [ model.end_sym_sentence ]
