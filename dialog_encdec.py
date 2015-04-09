@@ -490,7 +490,9 @@ class Decoder(EncoderDecoderBase):
         hd_tm1 = (m_t) * hd_tm1 + (1 - m_t) * T.tanh(T.dot(hs_t, self.Wd_s_0) + self.bd_s_0) 
         # ^ iff x_{t - 1} = </s> (m_t = 0) then x_{t - 1} = 0
         # and hd_{t - 1} = tanh(W_s_0 hs_t + bd_s_0) else hd_{t - 1} is left unchanged (m_t = 1)
-         
+  
+        # In the 'selective' decoder bias type each hidden state of the decoder
+        # RNN receives the hs_t modified by the selective bias -> hsr_t 
         if self.decoder_bias_type == 'selective':
             rd_sel_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_sel_e) + T.dot(hd_tm1, self.Wd_sel_h) + T.dot(hs_t, self.Wd_sel_s) + self.bd_sel)
             hsr_t = rd_sel_t * hs_t
@@ -504,8 +506,11 @@ class Decoder(EncoderDecoderBase):
              
             hd_t = (np.float32(1.) - zd_t) * hd_tm1 + zd_t * hd_tilde 
             output = (hd_t, hsr_t, rd_sel_t, rd_t, zd_t, hd_tilde)
-                 
+        
+        # In the 'all' decoder bias type each hidden state of the decoder
+        # RNN receives the hs_t vector as bias without modification
         elif self.decoder_bias_type == 'all':
+        
             rd_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_in_r) + T.dot(hd_tm1, self.Wd_hh_r) + T.dot(hs_t, self.Wd_s_r) + self.bd_r)
             zd_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_in_z) + T.dot(hd_tm1, self.Wd_hh_z) + T.dot(hs_t, self.Wd_s_z) + self.bd_z)
             hd_tilde = self.sent_rec_activation(T.dot(xd_t, self.Wd_in) \
