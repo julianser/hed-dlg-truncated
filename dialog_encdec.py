@@ -669,14 +669,14 @@ class DialogEncoderDecoder(Model):
                 outputs=[h, hs], name="encoder_fn")
         return self.encoder_fn
 
-    def __init__(self, state):
+    def __init__(self, rng, state):
         Model.__init__(self)    
         self.state = state
         
         # Compatibility towards older models
         self.__dict__.update(state)
-        self.rng = np.random.RandomState(self.seed) 
-
+        self.rng = rng 
+        
         # Load dictionary
         raw_dict = cPickle.load(open(self.dictionary, 'r'))
         
