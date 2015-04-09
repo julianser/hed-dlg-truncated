@@ -20,8 +20,10 @@ class SSFetcher(threading.Thread):
 
     def run(self):
         diter = self.parent
-        np.random.shuffle(self.indexes)
-        
+
+        # Shuffle with parents random generator 
+        self.parent.rng.shuffle(self.indexes)
+         
         offset = 0 
         # Take groups of 10000 triples and group by length
         while not diter.exit_flag:
@@ -57,6 +59,7 @@ class SSFetcher(threading.Thread):
 
 class SSIterator(object):
     def __init__(self,
+                 rng,
                  batch_size,
                  triple_file=None,
                  dtype="int32",
@@ -70,6 +73,7 @@ class SSIterator(object):
         args = locals()
         args.pop("self")
         self.__dict__.update(args)
+        self.rng = rng
         self.load_files()
         self.exit_flag = False
 

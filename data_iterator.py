@@ -52,10 +52,10 @@ def create_padded_batch(state, x):
     assert num_preds == numpy.sum(Xmask)
     return {'x': X, 'x_mask': Xmask, 'num_preds': num_preds, 'max_length': max_length}
 
-def get_batch_iterator(state):
+def get_batch_iterator(rng, state):
     class Iterator(SSIterator):
         def __init__(self, *args, **kwargs):
-            SSIterator.__init__(self, *args, **kwargs)
+            SSIterator.__init__(self, rng, *args, **kwargs)
             self.batch_iter = None
     
         def get_homogenous_batch_iter(self):
@@ -119,21 +119,3 @@ def get_batch_iterator(state):
         max_len=state['seqlen'])
 
     return train_data, valid_data, test_data
-
-if __name__ == '__main__':
-    state = prototype_rfp()
-    train_data, valid_data, test_data =  get_batch_iterator(state)
-    train_data.start()
-
-    cpt = 0
-    while True:
-        print "Done ", cpt
-        batch = train_data.next()
-        if not batch:
-            print "Restart"
-            continue
-        cpt += 1
-        
-        print batch['x'].shape
-        print batch['y'].shape
-        break
