@@ -68,7 +68,8 @@ def main(args):
     global timings
     state = eval(args.prototype)() 
 
-    logging.basicConfig(level=getattr(logging, state['level']), format="%(asctime)s: %(name)s: %(levelname)s: %(message)s")
+    logging.basicConfig(level = getattr(logging, state['level']), \
+                        format = "%(asctime)s: %(name)s: %(levelname)s: %(message)s")
      
     if args.resume != "":
         logger.debug("Resuming %s" % args.resume)
@@ -238,7 +239,7 @@ def main(args):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--resume", type=str, default="", help="Resume training from that state")
-    parser.add_argument("--prototype", type=str, help="Use the prototype", default='prototype_triples')
+    parser.add_argument("--prototype", type=str, help="Use the prototype", default='prototype_state')
 
     args = parser.parse_args()
     return args
