@@ -1,7 +1,5 @@
 """
-Dialog hierarchical encoder-decoder code.
-The code is inspired from nmt encdec code in groundhog
-but we do not rely on groundhog infrastructure.
+Computes BLEU@n with optional smoothing.
 """
 __docformat__ = 'restructedtext en'
 __authors__ = ("Alessandro Sordoni")
