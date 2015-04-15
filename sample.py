@@ -29,42 +29,6 @@ class Timer(object):
     def finish(self):
         self.total += time.time() - self.start_time
 
-def sample(model, contexts, n_samples=1, ignore_unk=False, verbose=False):
-    if verbose:
-        logger.info("Starting beam search : {} start sequences in total".format(len(contexts)))
-
-    # Compile beam search
-    beam_search = search.BeamSearch(model)
-    beam_search.compile()
-
-    context_samples = []
-    context_costs = []
-
-    # Start loop for each sentence
-    for context_id, context_sentences in enumerate(contexts):
-        if verbose:
-            logger.info("Searching for {}".format(context_sentences))
-
-        # Convert contextes into list of ids
-        joined_context = []
-        for sentence in context_sentences:
-            sentence_ids = model.words_to_indices(sentence.split())
-            # Add sos and eos tokens
-            joined_context += [model.sos_sym] + sentence_ids + [model.eos_sym]
-
-        samples, costs = beam_search.search(joined_context, n_samples, ignore_unk=ignore_unk)
-        # Convert back indices to list of words
-        converted_samples = map(model.indices_to_words, samples)
-        # Join the list of words
-        converted_samples = map(' '.join, converted_samples)
-
-        if verbose:
-            for i in range(len(converted_samples)):
-                print "{}: {}".format(costs[i], converted_samples[i].encode('utf-8'))
-        context_samples.append(converted_samples)
-        context_costs.append(costs)
-    return context_samples, context_costs
-
 def parse_args():
     parser = argparse.ArgumentParser("Sample (with beam-search) from the session model")
 
@@ -109,6 +73,8 @@ def main():
     logging.basicConfig(level=getattr(logging, state['level']), format="%(asctime)s: %(name)s: %(levelname)s: %(message)s")
 
     model = DialogEncoderDecoder(state)
+    sampler = search.Sampler(model)
+
     if os.path.isfile(model_path):
         logger.debug("Loading previous model")
         model.load(model_path)
@@ -119,8 +85,7 @@ def main():
     lines = open(args.context, "r").readlines()
     contexts = [x.strip().split('\t') for x in lines]
 
-    context_samples, context_costs = sample(model,
-                                            contexts,
+    context_samples, context_costs = sampler.sample(contexts,
                                             n_samples=args.n_samples,
                                             ignore_unk=args.ignore_unk,
                                             verbose=args.verbose)

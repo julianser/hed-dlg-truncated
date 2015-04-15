@@ -136,3 +136,47 @@ class BeamSearch(object):
         fin_beam_costs = numpy.array(sorted(fin_beam_costs))
          
         return fin_beam_gen, fin_beam_costs
+
+class Sampler(object):
+    """
+    A simple sampler based on beam search
+    """
+    def __init__(self, model):                
+        # Compile beam search
+        self.model = model
+        self.beam_search = BeamSearch(model)
+        self.beam_search.compile()
+
+    def sample(self, contexts, n_samples=1, ignore_unk=False, verbose=False):
+        if verbose:
+            logger.info("Starting beam search : {} start sequences in total".format(len(contexts)))
+
+        context_samples = []
+        context_costs = []
+
+        # Start loop for each sentence
+        for context_id, context_sentences in enumerate(contexts):
+            if verbose:
+                logger.info("Searching for {}".format(context_sentences))
+
+            # Convert contextes into list of ids
+            joined_context = []
+            for sentence in context_sentences:
+                sentence_ids = self.model.words_to_indices(sentence.split())
+                # Add sos and eos tokens
+                joined_context += [self.model.sos_sym] + sentence_ids + [self.model.eos_sym]
+
+            samples, costs = self.beam_search.search(joined_context, n_samples, ignore_unk=ignore_unk)
+            # Convert back indices to list of words
+            converted_samples = map(self.model.indices_to_words, samples)
+            # Join the list of words
+            converted_samples = map(' '.join, converted_samples)
+
+            if verbose:
+                for i in range(len(converted_samples)):
+                    print "{}: {}".format(costs[i], converted_samples[i].encode('utf-8'))
+            
+            context_samples.append(converted_samples)
+            context_costs.append(costs)
+        
+        return context_samples, context_costs
