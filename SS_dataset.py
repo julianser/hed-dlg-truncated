@@ -37,7 +37,7 @@ class SSFetcher(threading.Thread):
                     else:
                         # Infinite loop here, we reshuffle the indexes
                         # and reset the offset
-                        np.random.shuffle(self.indexes)
+                        self.parent.rng.shuffle(self.indexes)
                         offset = 0
 
                 index = self.indexes[offset]
@@ -103,19 +103,3 @@ class SSIterator(object):
         if not batch:
             self.exit_flag = True
         return batch
-
-if __name__ == '__main__':
-    """ debug """
-    import sys
-    
-    iterator = SSIterator(100, triple_file=sys.argv[1], use_infinite_loop=False)
-    iterator.start()
-    
-    _cpt = 0
-    while True:
-        batch = iterator.next()
-        if batch is None:
-            break
-        _cpt += 1
-     
-    print "Read %d batches" % _cpt
