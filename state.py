@@ -82,13 +82,13 @@ def prototype_test():
     state = prototype_state()
     
     # Fill your paths here! 
-    state['train_triples'] = ""
-    state['test_triples'] = ""
-    state['valid_triples'] = ""
-    state['dictionary'] = ""
-    state['save_dir'] = ""
+    state['train_triples'] = "./tests/data/ttrain.triples.pkl"
+    state['test_triples'] = "./tests/data/ttest.triples.pkl"
+    state['valid_triples'] = "./tests/data/tvalid.triples.pkl"
+    state['dictionary'] = "./tests/data/ttrain.dict.pkl"
+    state['save_dir'] = "./tests/models/"
     
-    state['prefix'] = "TestModel_" 
+    state['prefix'] = "testmodel_" 
     state['updater'] = 'adam'
     
     state['maxout_out'] = False
