@@ -58,10 +58,10 @@ def get_batch_iterator(rng, state):
             SSIterator.__init__(self, rng, *args, **kwargs)
             self.batch_iter = None
     
-        def get_homogenous_batch_iter(self):
+        def get_homogenous_batch_iter(self, batch_size = -1):
             while True:
                 k_batches = state['sort_k_batches']
-                batch_size = state['bs']
+                batch_size = self.batch_size if (batch_size == -1) else batch_size 
                
                 data = []
                 for k in range(k_batches):
@@ -72,13 +72,11 @@ def get_batch_iterator(rng, state):
                 if not len(data):
                     return
                 
-                triples = data
-                x = numpy.asarray(list(itertools.chain(*triples)))
+                x = numpy.asarray(list(itertools.chain(*data)))
                 lens = numpy.asarray([map(len, x)])
-                order = numpy.argsort(lens.max(axis=0)) if state['sort_k_batches'] > 1 \
-                        else numpy.arange(len(x))
-                
-                for k in range(len(triples)):
+                order = numpy.argsort(lens.max(axis=0))
+                 
+                for k in range(len(data)):
                     indices = order[k * batch_size:(k + 1) * batch_size]
                     batch = create_padded_batch(state, [x[indices]])
                     if batch:
@@ -88,9 +86,13 @@ def get_batch_iterator(rng, state):
             SSIterator.start(self)
             self.batch_iter = None
 
-        def next(self):
+        def next(self, batch_size = -1):
+            """ 
+            We can specify a batch size,
+            independent of the object initialization. 
+            """
             if not self.batch_iter:
-                self.batch_iter = self.get_homogenous_batch_iter()
+                self.batch_iter = self.get_homogenous_batch_iter(batch_size)
             try:
                 batch = next(self.batch_iter)
             except StopIteration:
