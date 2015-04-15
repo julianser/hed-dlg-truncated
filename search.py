@@ -59,7 +59,7 @@ class BeamSearch(object):
         for k in range(100):
             if beam_size == 0:
                 break
-
+            
             if verbose:
                 logger.info("Beam search at step %d" % k)
             
@@ -123,7 +123,8 @@ class BeamSearch(object):
                     indices.append(i)
                 else:
                     beam_size -= 1
-                    fin_beam_gen.append(new_beam_gen[i])
+                    # Add without start and end-of-sentence
+                    fin_beam_gen.append(new_beam_gen[i][1:-1])
                     if normalize_by_length:
                         fin_beam_costs.append(new_costs[i]/len(new_beam_gen[i]))
 

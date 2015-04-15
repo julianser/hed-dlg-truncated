@@ -567,16 +567,25 @@ class Decoder(EncoderDecoderBase):
 
 class DialogEncoderDecoder(Model):
     def indices_to_words(self, seq):
-        sen = []
-        for k in range(len(seq)):
-            sen.append(self.idx_to_str[seq[k]])
-        return sen
+        """
+        Converts a list of words to a list
+        of word ids. Use unk_sym if a word is not
+        known.
+        """
+        def convert():
+            for word_index in seq:
+                if word_index > len(self.idx_to_str):
+                    raise ValueError('Word index is too large for the model vocabulary!')
+                yield self.idx_to_str[word_index]
+        return list(convert())
 
     def words_to_indices(self, seq):
-        sen = []
-        for k in range(len(seq)):
-            sen.append(self.str_to_idx.get(seq[k], self.unk_sym))
-        return sen
+        """
+        Converts a list of words to a list
+        of word ids. Use unk_sym if a word is not
+        known.
+        """
+        return [self.str_to_idx.get(word, self.unk_sym) for word in seq]
 
     def compute_updates(self, training_cost, params):
         updates = []
