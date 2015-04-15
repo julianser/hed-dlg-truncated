@@ -90,9 +90,9 @@ def main(args):
     logger.debug("State:\n{}".format(pprint.pformat(state)))
     logger.debug("Timings:\n{}".format(pprint.pformat(timings)))
     
-    rng = numpy.random.RandomState(state['seed'])
     
-    model = DialogEncoderDecoder(rng, state)
+    model = DialogEncoderDecoder(state)
+    rng = model.rng 
     if args.resume != "":
         filename = args.resume + '_model.npz'
         if os.path.isfile(filename):
@@ -148,6 +148,7 @@ def main(args):
          
         # Training phase
         batch = train_data.next() 
+        
         # Train finished
         if not batch:
             # Restart training
