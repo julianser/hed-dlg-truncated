@@ -33,14 +33,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument("input", type=str, help="Tab separated triple file (assumed shuffled)")
 parser.add_argument("--cutoff", type=int, default=-1, help="Vocabulary cutoff (optional)")
 parser.add_argument("--dict", type=str, default="", help="External dictionary (pkl file)")
-parser.add_argument("--use_all_triples", type=str, default='False', help="If false, all training examples with more than or less than three utterances will be removed. If true, training examples with less than three utterances will have empty utterances appended at the beginning, and training examples with more than three utterances will have their first utterances discarded.")
+parser.add_argument("--use_all_triples", action='store_true', help="If false, all training examples with more than or less than three utterances will be removed. If true, training examples with less than three utterances will have empty utterances appended at the beginning, and training examples with more than three utterances will have their first utterances discarded.")
+
 parser.add_argument("output", type=str, help="Prefix of the pickle binarized triple corpus")
 args = parser.parse_args()
-
-
-use_all_triples = False
-if args.use_all_triples == 'True':
-    use_all_triples = True
 
 if not os.path.isfile(args.input):
     raise Exception("Input file not found!")
@@ -116,7 +112,7 @@ for line, triple in enumerate(open(args.input, 'r')):
             freqs[1] += 1
             freqs[2] += 1
 
-    if use_all_triples == True:
+    if args.use_all_triples == True:
         if len(triple_lst) > 3:
             triple_lst = triple_lst[len(triple_lst)-2:len(triple_lst)]
         else:
