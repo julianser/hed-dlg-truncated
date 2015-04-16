@@ -169,7 +169,7 @@ class Sampler(object):
             
             samples, costs = self.beam_search.search(joined_context, n_samples, ignore_unk=ignore_unk, verbose=verbose)
             # Convert back indices to list of words
-            converted_samples = map(self.model.indices_to_words, samples, exclude_start_end=True)
+            converted_samples = map(lambda sample : self.model.indices_to_words(sample, exclude_start_end=True), samples)
             # Join the list of words
             converted_samples = map(' '.join, converted_samples)
 
