@@ -113,9 +113,7 @@ def main(args):
     else:
         # assign new run_id key
         model.state['run_id'] = RUN_ID
-
-    save(model, timings) 
-
+    
     # Build the data structures for Bleu evaluation
     if 'bleu_evaluation' in state:
         beam_sampler = search.Sampler(model)
