@@ -569,7 +569,7 @@ class Decoder(EncoderDecoderBase):
     ####
 
 class DialogEncoderDecoder(Model):
-    def indices_to_words(self, seq):
+    def indices_to_words(self, seq, exclude_start_end=True):
         """
         Converts a list of words to a list
         of word ids. Use unk_sym if a word is not
@@ -579,7 +579,8 @@ class DialogEncoderDecoder(Model):
             for word_index in seq:
                 if word_index > len(self.idx_to_str):
                     raise ValueError('Word index is too large for the model vocabulary!')
-                yield self.idx_to_str[word_index]
+                if not exclude_start_end or (word_index != self.eos_sym and word_index != self.sos_sym):
+                    yield self.idx_to_str[word_index]
         return list(convert())
 
     def words_to_indices(self, seq):
