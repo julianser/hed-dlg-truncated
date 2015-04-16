@@ -4,6 +4,7 @@ from data_iterator import *
 from state import *
 from dialog_encdec import *
 from utils import *
+from evaluation import *
 
 import time
 import traceback
@@ -12,6 +13,7 @@ import sys
 import argparse
 import cPickle
 import logging
+import search
 import pprint
 import numpy
 import collections
@@ -34,12 +36,16 @@ logger = logging.getLogger(__name__)
 ### Unique RUN_ID for this execution
 RUN_ID = str(time.time())
 
-timings = {}
-timings["train_cost"] = []
-timings["valid_cost"] = []
-###
+### Additional measures can be set here
+measures = ["train", "valid", "bleu"]
 
-def save(model):
+def init_timings():
+    timings = {}
+    for m in measures:
+        timings[m] = []
+    return timings
+
+def save(model, timings):
     print "Saving the model..."
 
     # ignore keyboard interrupt while saving
@@ -65,12 +71,13 @@ def load(model, filename):
     print "Model loaded, took {}".format(time.time() - start)
 
 def main(args):     
-    global timings
-    state = eval(args.prototype)() 
-
-    logging.basicConfig(level = getattr(logging, state['level']), \
+    logging.basicConfig(level = logging.DEBUG,
                         format = "%(asctime)s: %(name)s: %(levelname)s: %(message)s")
      
+    state = eval(args.prototype)() 
+    timings = init_timings() 
+    
+    
     if args.resume != "":
         logger.debug("Resuming %s" % args.resume)
         
@@ -82,17 +89,17 @@ def main(args):
             
             state = cPickle.load(open(state_file, 'r'))
             timings = dict(numpy.load(open(timings_file, 'r')))
-            timings['train_cost'] = list(timings['train_cost'])
-            timings['valid_cost'] = list(timings['valid_cost'])   
+            for x, y in timings.items():
+                timings[x] = list(y)
         else:
             raise Exception("Cannot resume, cannot find files!")
-    
+
     logger.debug("State:\n{}".format(pprint.pformat(state)))
     logger.debug("Timings:\n{}".format(pprint.pformat(timings)))
-    
-    
+       
     model = DialogEncoderDecoder(state)
     rng = model.rng 
+
     if args.resume != "":
         filename = args.resume + '_model.npz'
         if os.path.isfile(filename):
@@ -102,13 +109,30 @@ def main(args):
             raise Exception("Cannot resume, cannot find model file!")
         
         if 'run_id' not in model.state:
-            raise ValueError('Backward compatibility not ensured! (need run_id in state)')
+            raise Exception('Backward compatibility not ensured! (need run_id in state)')
     else:
         # assign new run_id key
         model.state['run_id'] = RUN_ID
 
+    save(model, timings) 
+
+    # Build the data structures for Bleu evaluation
+    if 'bleu_evaluation' in state:
+        beam_sampler = search.Sampler(model)
+        bleu_eval = BleuEvaluator()
+        
+        samples = open(state['bleu_evaluation'], 'r').readlines() 
+        n = state['bleu_context_length']
+        
+        contexts = []
+        targets = []
+        for x in samples:        
+            sentences = x.strip().split('\t')
+            assert len(sentences) > n
+            contexts.append(sentences[:n])
+            targets.append(sentences[n:])
+
     logger.debug("Compile trainer")
-    
     if not state["use_nce"]:
         train_batch = model.build_train_function()
     else:
@@ -129,7 +153,6 @@ def main(args):
     patience = state['patience'] 
     start_time = time.time()
      
-    old_valid_cost = 1e21
     train_cost = 0
     train_done = 0
     ex_done = 0
@@ -187,7 +210,7 @@ def main(args):
         if valid_data is not None and\
             step % state['valid_freq'] == 0 and\
                 step > 1:
-                
+                 
                 valid_data.start()
                 valid_cost = 0
                 valid_done = 0
@@ -214,25 +237,34 @@ def main(args):
                     valid_done += batch['num_preds']
                 logger.debug("[VALIDATION END]") 
                  
-                valid_cost /= valid_done
-                 
-                if valid_cost >= old_valid_cost * state['cost_threshold']:
-                    patience -= 1
-                elif valid_cost < old_valid_cost:
+                valid_cost /= valid_done 
+                if len(timings["valid"]) == 0 or valid_cost < timings["valid"][-1]:
                     patience = state['patience']
-                    old_valid_cost = valid_cost
                     # Saving model if decrease in validation cost
-                    save(model)
-                
+                    save(model, timings)
+                elif valid_cost >= timings["valid"][-1] * state['cost_threshold']:
+                    patience -= 1
+
                 print "** validation error = %.4f, patience = %d" % (float(valid_cost), patience)
                 
-                timings["train_cost"].append(train_cost/train_done)
-                timings["valid_cost"].append(valid_cost)
-                
+                timings["train"].append(train_cost/train_done)
+                timings["valid"].append(valid_cost)
+
                 # Reset train cost and train done
                 train_cost = 0
                 train_done = 0
-        
+       
+        if 'bleu_evaluation' in state and \
+            step % state['valid_freq'] == 0:
+             
+            # Bleu evaluation
+            samples, costs = beam_sampler.sample(contexts, n_samples=1, ignore_unk=True)
+            assert len(samples) == len(contexts)
+            
+            bleu = bleu_eval.evaluate(samples, targets)
+            print "** bleu error = %.4f ", bleu[0] 
+            timings["bleu"].append(bleu[0])
+
         step += 1
 
     logger.debug("All done, exiting...")
