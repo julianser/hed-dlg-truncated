@@ -136,7 +136,6 @@ class BeamSearch(object):
         # even if one sentence in the beam has been terminated </s>
         fin_beam_gen = numpy.array(fin_beam_gen)[numpy.argsort(fin_beam_costs)]
         fin_beam_costs = numpy.array(sorted(fin_beam_costs))
-        
         return fin_beam_gen[:beam_size], fin_beam_costs[:beam_size]
 
 class Sampler(object):
