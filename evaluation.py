@@ -149,3 +149,21 @@ class Bleu:
     def reset(self):
         self.statistics = []
 
+class BleuEvaluator(object):
+    """ Bleu evaluator
+    """
+    def __init__(self):
+        self.bleu = Bleu()
+
+    def evaluate(self, prediction, target):
+        if len(target) != len(prediction):
+            raise ValueError('Target and predictions length mismatch!')
+        
+        # Assume ordered list and take only the first one
+        if isinstance(prediction[0], list):
+            prediction = [x[0] for x in prediction]
+         
+        self.bleu.reset()
+        for ts, ps in zip(target, prediction):
+            self.bleu.update(ps, *ts)
+        return self.bleu.compute()
