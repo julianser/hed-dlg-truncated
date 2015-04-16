@@ -257,10 +257,10 @@ def main(args):
             # Bleu evaluation
             samples, costs = beam_sampler.sample(contexts, n_samples=1, ignore_unk=True)
             assert len(samples) == len(contexts)
-            
+             
             bleu = bleu_eval.evaluate(samples, targets)
-            
-            print "** bleu error = %.4f " % bleu[0] 
+             
+            print "** bleu score = %.4f " % bleu[0] 
             timings["bleu"].append(bleu[0])
 
         step += 1
