@@ -88,6 +88,14 @@ def prototype_test():
     state['dictionary'] = "./tests/data/ttrain.dict.pkl"
     state['save_dir'] = "./tests/models/"
     
+    # Handle bleu evaluation
+    state['bleu_evaluation'] = "./tests/bleu/bleu_evaluation"
+    state['bleu_context_length'] = 2
+    
+    # Validation frequency
+    state['valid_freq'] = 500
+    
+    # Varia
     state['prefix'] = "testmodel_" 
     state['updater'] = 'adam'
     
