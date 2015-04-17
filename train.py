@@ -206,8 +206,7 @@ def main(args):
                                                                              batch['max_length'], \
                                                                              float(train_cost/train_done))        
         if valid_data is not None and\
-            step % state['valid_freq'] == 0 and\
-                step > 1:
+            step % state['valid_freq'] == 0 and step > 1:
                  
                 valid_data.start()
                 valid_cost = 0
@@ -253,14 +252,15 @@ def main(args):
                 train_done = 0
        
         if 'bleu_evaluation' in state and \
-            step % state['valid_freq'] == 0:
+            step % state['valid_freq'] == 0 and step > 1:
              
             # Bleu evaluation
             samples, costs = beam_sampler.sample(contexts, n_samples=1, ignore_unk=True)
             assert len(samples) == len(contexts)
-            
+             
             bleu = bleu_eval.evaluate(samples, targets)
-            print "** bleu error = %.4f ", bleu[0] 
+             
+            print "** bleu score = %.4f " % bleu[0] 
             timings["bleu"].append(bleu[0])
 
         step += 1
