@@ -66,7 +66,7 @@ class Jaccard:
         if len(self.statistics) == 0:
             return numpy.zeros((1,)) 	
         stat_matrix = numpy.array(self.statistics)
-        return numpy.sum(stat_matrix, axis=0)
+        return numpy.mean(stat_matrix)
 
     def update(self, candidate, ref):
         stats = numpy.zeros((1,))	
