@@ -114,4 +114,43 @@ def prototype_test():
     state['rankdim'] = 25
     return state
 
+def prototype_moviedic():
+    state = prototype_state()
+    
+    # Fill your paths here! 
+    state['train_triples'] = "Data/Training.triples.pkl"
+    state['test_triples'] = "Data/Test.triples.pkl"
+    state['valid_triples'] = "Data/Validation.triples.pkl"
+    state['dictionary'] = "Data/Training.dict.pkl" 
+    state['save_dir'] = "Output" 
+    
+    # Handle bleu evaluation
+    state['bleu_evaluation'] = "Data/Validation_Shuffled_Dataset.txt"
+    state['bleu_context_length'] = 2
+    
+    # Validation frequency
+    state['valid_freq'] = 5000
+    
+    # Varia
+    state['prefix'] = "MovieScriptModel_" 
+    state['updater'] = 'adam'
+    
+    state['maxout_out'] = True
+    state['deep_out'] = True
+     
+    # If out of memory, modify this!
+    state['bs'] = 80
+    state['use_nce'] = False
+    state['decoder_bias_type'] = 'all' # Choose between 'first', 'all' and 'selective' 
+
+    # Increase sequence length to fit movie dialogues better
+    state['seqlen'] = 160
+
+    state['qdim'] = 600
+    # Dimensionality of triple hidden layer 
+    state['sdim'] = 300
+    # Dimensionality of low-rank approximation
+    state['rankdim'] = 300
+    return state
+
 
