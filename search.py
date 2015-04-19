@@ -123,13 +123,17 @@ class BeamSearch(object):
                     # Add without start and end-of-sentence
                     fin_beam_gen.append(beam_gen[i]) 
                     if normalize_by_length:
-                        fin_beam_costs.append(costs[i]/len(beam_gen[i]))
+                        cost[i] /= len(beam_gen[i])
+                    fin_beam_costs.append(cost[i])
         
         # If we have not sampled anything
         # then force include stuff
         if len(fin_beam_gen) == 0:
             fin_beam_gen = beam_gen
-            fin_beam_costs = [costs[i]/len(beam_gen[i]) for i in range(len(costs))]
+            if normalize_by_length:
+                costs = [costs[i]/len(beam_gen[i]) for i in range(len(beam_gen))]
+            fin_beam_costs = costs 
+            
 
         # Here we could have more than beam_size samples.
         # This is because we allow to sample beam_size terms
