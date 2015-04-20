@@ -237,8 +237,19 @@ def main(args):
                 valid_misclass = 0
                 valid_done = 0
 
+                # Prepare variables for plotting histogram over log-likelihoods
                 valid_data_len = valid_data.data_len
-                valid_cost_list = numpy.zeros((valid_data_len,)) # Used for plotting histogram over log-likelihoods
+                valid_cost_list = numpy.zeros((valid_data_len,))
+
+                # Prepare variables for printing the training examples the model performs best and worst on
+                valid_extrema_setsize = min(state['track_extrema_samples_count'], valid_data_len)
+                valid_extrema_samples_to_print = min(state['print_extrema_samples_count'], valid_extrema_setsize)
+
+                valid_lowest_costs = numpy.ones((valid_extrema_setsize,))*1000
+                valid_lowest_triples = numpy.ones((valid_extrema_setsize,state['seqlen']))*1000
+                valid_highest_costs = numpy.ones((valid_extrema_setsize,))*(-1000)
+                valid_highest_triples = numpy.ones((valid_extrema_setsize,state['seqlen']))*(-1000)
+
 
                 logger.debug("[VALIDATION START]") 
                 
@@ -264,6 +275,20 @@ def main(args):
                     # Store validation costs in list
                     nxt = min((valid_done+batch['num_preds']), valid_data_len)
                     valid_cost_list[valid_done:nxt] = numpy.exp(c_list[0:(nxt-valid_done)])                   
+
+                    # Store best and worst validation costs
+                    con_costs = np.concatenate([valid_lowest_costs, c_list[0:(nxt-valid_done)]])
+                    con_triples = np.concatenate([valid_lowest_triples, x_data[:, 0:(nxt-valid_done)].T])
+                    con_indices = con_costs.argsort()[0:valid_extrema_setsize][::1]
+                    valid_lowest_costs = con_costs[con_indices]
+                    valid_lowest_triples = con_triples[con_indices]
+
+                    con_costs = np.concatenate([valid_highest_costs, c_list[0:(nxt-valid_done)]])
+                    con_triples = np.concatenate([valid_highest_triples, x_data[:, 0:(nxt-valid_done)].T])
+                    con_indices = con_costs.argsort()[-valid_extrema_setsize:][::-1]
+                    valid_highest_costs = con_costs[con_indices]
+                    valid_highest_triples = con_triples[con_indices]
+
 
                     # Compute word-error rate
                     miscl = eval_misclass_batch(x_data, max_length, x_cost_mask)
@@ -304,7 +329,23 @@ def main(args):
                 pylab.hist(valid_cost_list, bins, normed=1, histtype='bar')
                 pylab.savefig(model.state['save_dir'] + '/' + model.state['run_id'] + "_" + model.state['prefix'] + 'Valid_WordPerplexities_'+ str(step) + '.png')
 
-       
+                # Print 5 of 10% validation samples with highest log-likelihood
+                if state['track_extrema_validation_samples']==True:
+                    print " lowest log-likelihood valid samples: " 
+                    np.random.shuffle(valid_lowest_triples)
+                    for i in range(valid_extrema_samples_to_print):
+                        sample_word_indices = valid_lowest_triples[i,:]
+                        sample_text = ' '.join(model.indices_to_words(sample_word_indices, exclude_start_end=True))
+                        print "      ", sample_text
+
+                    print " highest log-likelihood valid samples: " 
+                    np.random.shuffle(valid_highest_triples)
+                    for i in range(valid_extrema_samples_to_print):
+                        sample_word_indices = valid_highest_triples[i,:]
+                        sample_text = ' '.join(model.indices_to_words(sample_word_indices, exclude_start_end=True))
+                        print "      ", sample_text
+
+
         if 'bleu_evaluation' in state and \
             step % state['valid_freq'] == 0 and step > 1:
 

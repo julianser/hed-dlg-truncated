@@ -76,6 +76,13 @@ def prototype_state():
     state['time_stop'] = 24*60*31
     # Error level to stop at
     state['minerr'] = -1
+
+    # ----- EVALUATION PROCESS -----
+    state['track_extrema_validation_samples'] = True
+    state['track_extrema_samples_count'] = 100
+    state['print_extrema_samples_count'] = 5
+
+
     return state
 
 def prototype_test():
@@ -109,11 +116,11 @@ def prototype_test():
     state['use_nce'] = True
     state['decoder_bias_type'] = 'all' #'selective' 
     
-    state['qdim'] = 50 
+    state['qdim'] = 10 
     # Dimensionality of triple hidden layer 
-    state['sdim'] = 100
+    state['sdim'] = 20
     # Dimensionality of low-rank approximation
-    state['rankdim'] = 25
+    state['rankdim'] = 5
     return state
 
 def prototype_moviedic():
