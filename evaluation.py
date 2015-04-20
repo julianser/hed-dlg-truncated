@@ -78,10 +78,30 @@ class Jaccard:
 	
     def compute(self):
         stats = self.aggregate()
-        return stats[0]
+        #return stats[0]
+        return stats
 	
     def reset(self):
         self.statistics = []
+
+class JaccardEvaluator(object):
+    """ Jaccard evaluator
+    """
+    def __init__(self):
+        self.jaccard = Jaccard()
+
+    def evaluate(self, prediction, target):
+        if len(target) != len(prediction):
+            raise ValueError('Target and predictions length mismatch!')
+        
+        # Assume ordered list and take only the first one
+        if isinstance(prediction[0], list):
+            prediction = [x[0] for x in prediction]
+         
+        self.jaccard.reset()
+        for ts, ps in zip(target, prediction):
+            self.jaccard.update(ps, *ts)
+        return self.jaccard.compute()
 
 class Bleu:
     """
@@ -167,3 +187,116 @@ class BleuEvaluator(object):
         for ts, ps in zip(target, prediction):
             self.bleu.update(ps, *ts)
         return self.bleu.compute()
+
+
+
+class Recall:
+    """
+    Evaluate mean recall at utterance level.
+    Use: 
+    >>> r = Recall()
+    >>> r.update("i have it", ["i have is", "i have some"])
+    >>> r.update("i have it", ["i have is", "i have it"])
+    >>> print r.compute()
+    0.5
+    >>> r.reset()
+    """
+    def __init__(self, n):
+        self.n = n
+        self.statistics = []
+       	
+    def aggregate(self):
+        if len(self.statistics) == 0:
+            return numpy.zeros((1,)) 	
+        stat_matrix = numpy.array(self.statistics)
+        return numpy.mean(stat_matrix)
+
+    def update(self, candidates, ref):
+        stats = numpy.zeros((1,))	
+        
+        for candidate in candidates:
+            if candidate == ref:
+                stats[0] = 1
+                self.statistics.append(stats)
+                break
+	
+    def compute(self):
+        stats = self.aggregate()
+        return stats
+	
+    def reset(self):
+        self.statistics = []
+
+class RecallEvaluator(object):
+    """ Recall evaluator
+    """
+    def __init__(self, n=5):
+        self.recall = Recall(n)
+        self.n = n
+
+    def evaluate(self, prediction, target):
+        if len(target) != len(prediction):
+            raise ValueError('Target and predictions length mismatch!')
+
+        self.recall.reset()
+        for ts, ps in zip(target, prediction):
+            assert(len(ps) >= self.n)
+            self.recall.update(ps[0:self.n], *ts)
+
+        return self.recall.compute()
+
+
+class MRR:
+    """
+    Evaluate mean reciprocal rank.
+    Use: 
+    >>> r = MRR()
+    >>> r.update("i have it", ["i have is", "i have some"])
+    >>> r.update("i have it", ["i have is", "i have it"])
+    >>> print r.compute()
+    0.25
+    >>> r.reset()
+    """
+    def __init__(self, n):
+        self.n = n
+        self.statistics = []
+       	
+    def aggregate(self):
+        if len(self.statistics) == 0:
+            return numpy.zeros((1,)) 	
+        stat_matrix = numpy.array(self.statistics)
+        return numpy.mean(stat_matrix)
+
+    def update(self, candidates, ref):
+        stats = numpy.zeros((1,))	
+        
+        for index in range(len(candidates)):
+            if candidates[index] == ref:
+                stats[0] = 1/(index+1)
+                self.statistics.append(stats)
+                break
+	
+    def compute(self):
+        stats = self.aggregate()
+        return stats
+	
+    def reset(self):
+        self.statistics = []
+
+class MRREvaluator(object):
+    """ Mean reciprocal rank evaluator
+    """
+    def __init__(self, n=5):
+        self.mrr = MRR(n)
+        self.n = n
+
+    def evaluate(self, prediction, target):
+        if len(target) != len(prediction):
+            raise ValueError('Target and predictions length mismatch!')
+
+        self.mrr.reset()
+        for ts, ps in zip(target, prediction):
+            assert(len(ps) >= self.n)
+            self.mrr.update(ps[0:self.n], *ts)
+
+        return self.mrr.compute()

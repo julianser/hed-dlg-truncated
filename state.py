@@ -91,9 +91,11 @@ def prototype_test():
     # Handle bleu evaluation
     state['bleu_evaluation'] = "./tests/bleu/bleu_evaluation"
     state['bleu_context_length'] = 2
+
+
     
     # Validation frequency
-    state['valid_freq'] = 500
+    state['valid_freq'] = 50
     
     # Varia
     state['prefix'] = "testmodel_" 
@@ -103,9 +105,9 @@ def prototype_test():
     state['deep_out'] = True
      
     # If out of memory, modify this!
-    state['bs'] = 80
+    state['bs'] = 10
     state['use_nce'] = True
-    state['decoder_bias_type'] = 'selective' 
+    state['decoder_bias_type'] = 'all' #'selective' 
     
     state['qdim'] = 50 
     # Dimensionality of triple hidden layer 

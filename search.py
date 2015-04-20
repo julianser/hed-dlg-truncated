@@ -123,8 +123,8 @@ class BeamSearch(object):
                     # Add without start and end-of-sentence
                     fin_beam_gen.append(beam_gen[i]) 
                     if normalize_by_length:
-                        cost[i] /= len(beam_gen[i])
-                    fin_beam_costs.append(cost[i])
+                        costs[i] /= len(beam_gen[i])
+                    fin_beam_costs.append(costs[i])
         
         # If we have not sampled anything
         # then force include stuff
