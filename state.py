@@ -78,9 +78,9 @@ def prototype_state():
     state['minerr'] = -1
 
     # ----- EVALUATION PROCESS -----
-    state['track_extrema_validation_samples'] = True
-    state['track_extrema_samples_count'] = 100
-    state['print_extrema_samples_count'] = 5
+    state['track_extrema_validation_samples'] = True # If set to true will print the extrema (lowest and highest log-likelihood scoring) validation samples
+    state['track_extrema_samples_count'] = 100 # Set of extrema samples to track
+    state['print_extrema_samples_count'] = 5 # Number of extrema samples to print (chosen at random from the extrema sets)
 
 
     return state
@@ -112,15 +112,15 @@ def prototype_test():
     state['deep_out'] = True
      
     # If out of memory, modify this!
-    state['bs'] = 10
+    state['bs'] = 80
     state['use_nce'] = True
     state['decoder_bias_type'] = 'all' #'selective' 
     
-    state['qdim'] = 10 
+    state['qdim'] = 50 
     # Dimensionality of triple hidden layer 
-    state['sdim'] = 20
+    state['sdim'] = 100
     # Dimensionality of low-rank approximation
-    state['rankdim'] = 5
+    state['rankdim'] = 25
     return state
 
 def prototype_moviedic():

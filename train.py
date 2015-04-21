@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 RUN_ID = str(time.time())
 
 ### Additional measures can be set here
-measures = ["train_cost", "train_misclass", "valid_cost", "valid_misclass", "valid_bleu", 'valid_jaccard', 'valid_recall_at_1', 'valid_recall_at_5', 'valid_mrr_at_5']
+measures = ["train_cost", "train_misclass", "valid_cost", "valid_misclass", "valid_bleu", 'valid_jaccard', 'valid_recall_at_1', 'valid_recall_at_5', 'valid_mrr_at_5', 'tfidf_cs_at_1', 'tfidf_cs_at_5']
 
 def init_timings():
     timings = {}
@@ -117,26 +117,6 @@ def main(args):
     else:
         # assign new run_id key
         model.state['run_id'] = RUN_ID
-    
-    # Build the data structures for Bleu evaluation
-    if 'bleu_evaluation' in state:
-        beam_sampler = search.Sampler(model)
-        bleu_eval = BleuEvaluator()
-        jaccard_eval = JaccardEvaluator()
-        recall_at_1_eval = RecallEvaluator(n=1)
-        recall_at_5_eval = RecallEvaluator(n=5)
-        mrr_at_5_eval = MRREvaluator(n=5)
-        
-        samples = open(state['bleu_evaluation'], 'r').readlines() 
-        n = state['bleu_context_length']
-        
-        contexts = []
-        targets = []
-        for x in samples:        
-            sentences = x.strip().split('\t')
-            assert len(sentences) > n
-            contexts.append(sentences[:n])
-            targets.append(sentences[n:])
 
     logger.debug("Compile trainer")
     if not state["use_nce"]:
@@ -154,6 +134,28 @@ def main(args):
     test_data = get_batch_iterator(rng, state)
     
     train_data.start()
+    
+    # Build the data structures for Bleu evaluation
+    if 'bleu_evaluation' in state:
+        beam_sampler = search.Sampler(model)
+        bleu_eval = BleuEvaluator()
+        jaccard_eval = JaccardEvaluator()
+        recall_at_1_eval = RecallEvaluator(n=1)
+        recall_at_5_eval = RecallEvaluator(n=5)
+        mrr_at_5_eval = MRREvaluator(n=5)
+        tfidf_cs_at_1_eval = TFIDF_CS_Evaluator(model, train_data.data_len, 1)
+        tfidf_cs_at_5_eval = TFIDF_CS_Evaluator(model, train_data.data_len, 5)
+
+        samples = open(state['bleu_evaluation'], 'r').readlines() 
+        n = state['bleu_context_length']
+        
+        contexts = []
+        targets = []
+        for x in samples:        
+            sentences = x.strip().split('\t')
+            assert len(sentences) > n
+            contexts.append(sentences[:n])
+            targets.append(sentences[n:])
 
     # Start looping through the dataset
     step = 0
@@ -334,16 +336,16 @@ def main(args):
                     print " lowest log-likelihood valid samples: " 
                     np.random.shuffle(valid_lowest_triples)
                     for i in range(valid_extrema_samples_to_print):
-                        sample_word_indices = valid_lowest_triples[i,:]
-                        sample_text = ' '.join(model.indices_to_words(sample_word_indices, exclude_start_end=True))
-                        print "      ", sample_text
+                        print "      {}".format(" ".join(model.indices_to_words(numpy.ravel(valid_lowest_triples[i,:]))))
 
                     print " highest log-likelihood valid samples: " 
                     np.random.shuffle(valid_highest_triples)
                     for i in range(valid_extrema_samples_to_print):
-                        sample_word_indices = valid_highest_triples[i,:]
-                        sample_text = ' '.join(model.indices_to_words(sample_word_indices, exclude_start_end=True))
-                        print "      ", sample_text
+                        print "      {}".format(" ".join(model.indices_to_words(numpy.ravel(valid_highest_triples[i,:]))))
+
+
+
+
 
 
         if 'bleu_evaluation' in state and \
@@ -378,9 +380,20 @@ def main(args):
 
             mrr_at_5 = mrr_at_5_eval.evaluate(samples, targets)
 
+            # MRR evaluation
             print "** mrr@5 score = %.4f " % mrr_at_5
             timings["valid_mrr_at_5"].append(mrr_at_5)
 
+            # TF-IDF cosine similarity evaluation
+            tfidf_cs_at_1 = tfidf_cs_at_1_eval.evaluate(samples, targets)
+
+            print "** tfidf-cs@1 score = %.4f " % tfidf_cs_at_1
+            timings["tfidf_cs_at_1"].append(tfidf_cs_at_1)
+
+            tfidf_cs_at_5 = tfidf_cs_at_5_eval.evaluate(samples, targets)
+
+            print "** tfidf-cs@5 score = %.4f " % tfidf_cs_at_5
+            timings["tfidf_cs_at_5"].append(tfidf_cs_at_5)
 
         step += 1
 

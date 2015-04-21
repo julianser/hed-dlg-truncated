@@ -58,6 +58,7 @@ if args.dict != "":
 else:
     word_counter = Counter()
 
+
     for line in open(args.input, 'r'):
         s = [x for x in line.strip().split()]
         word_counter.update(s) 
@@ -71,10 +72,12 @@ else:
     else:
         vocab_count = word_counter.most_common()
 
+
     # Add special tokens to the vocabulary
     vocab = {'<unk>': 0, '<s>': 1, '</s>': 2}
     for i, (word, count) in enumerate(vocab_count):
         vocab[word] = i + 3
+
 
 logger.info("Vocab size %d" % len(vocab))
 
@@ -88,7 +91,10 @@ binarized_corpus = []
 mean_sl = 0.
 unknowns = 0.
 num_terms = 0.
-freqs = collections.defaultdict(lambda: 1)
+freqs = collections.defaultdict(lambda: 0)
+
+# counts the number of triples each unique word exists in; also known as document frequency
+df = collections.defaultdict(lambda: 0)
 
 for line, triple in enumerate(open(args.input, 'r')):
     triple_lst = []
@@ -111,6 +117,8 @@ for line, triple in enumerate(open(args.input, 'r')):
             triple_lst.append([1] + utterance_lst + [2]) 
             freqs[1] += 1
             freqs[2] += 1
+            df[1] += 1
+            df[2] += 1
 
     if args.use_all_triples == True:
         if len(triple_lst) > 3:
@@ -125,9 +133,19 @@ for line, triple in enumerate(open(args.input, 'r')):
         binarized_triple = list(itertools.chain(*triple_lst)) 
         binarized_corpus.append(binarized_triple)
 
+    unique_word_indices = []
+    for i in range(len(triple_lst)):
+        for word_id in triple_lst[i]:
+            unique_word_indices.append(word_id)
+
+    unique_word_indices = set(unique_word_indices)
+    for word_id in unique_word_indices:
+        df[word_id] += 1
+
 safe_pickle(binarized_corpus, args.output + ".triples.pkl")
+
 if args.dict == "":
-     safe_pickle([(word, word_id, freqs[word_id]) for word, word_id in vocab.items()], args.output + ".dict.pkl")
+     safe_pickle([(word, word_id, freqs[word_id], df[word_id]) for word, word_id in vocab.items()], args.output + ".dict.pkl")
 
 logger.info("Number of unknowns %d" % unknowns)
 logger.info("Number of terms %d" % num_terms)

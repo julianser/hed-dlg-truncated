@@ -712,9 +712,13 @@ class DialogEncoderDecoder(Model):
         
         self.t_noise_probs = theano.shared(self.noise_probs.astype('float32'), 't_noise_probs')
         # Dictionaries to convert str to idx and vice-versa
-        self.str_to_idx = dict([(tok, tok_id) for tok, tok_id, _ in raw_dict])
-        self.idx_to_str = dict([(tok_id, tok) for tok, tok_id, freq in raw_dict])
+        self.str_to_idx = dict([(tok, tok_id) for tok, tok_id, _, _ in raw_dict])
+        self.idx_to_str = dict([(tok_id, tok) for tok, tok_id, freq, _ in raw_dict])
 
+        # Extract document (triple) frequency for each word
+        self.word_freq = dict([(tok_id, freq) for _, tok_id, freq, _ in raw_dict])
+        self.document_freq = dict([(tok_id, df) for _, tok_id, _, df in raw_dict])
+        print 'self.document_freq', self.document_freq
         if '</s>' not in self.str_to_idx \
            or '<s>' not in self.str_to_idx:
                 raise Exception("Error, malformed dictionary!")
