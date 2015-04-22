@@ -82,6 +82,8 @@ def prototype_state():
     state['track_extrema_samples_count'] = 100 # Set of extrema samples to track
     state['print_extrema_samples_count'] = 5 # Number of extrema samples to print (chosen at random from the extrema sets)
 
+    state['compute_mutual_information'] = True # If true, the empirical mutural information will be calculcated on the validation set
+
 
     return state
 

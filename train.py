@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 RUN_ID = str(time.time())
 
 ### Additional measures can be set here
-measures = ["train_cost", "train_misclass", "valid_cost", "valid_misclass", "valid_bleu", 'valid_jaccard', 'valid_recall_at_1', 'valid_recall_at_5', 'valid_mrr_at_5', 'tfidf_cs_at_1', 'tfidf_cs_at_5']
+measures = ["train_cost", "train_misclass", "valid_cost", "valid_misclass", "valid_emi", "valid_bleu", 'valid_jaccard', 'valid_recall_at_1', 'valid_recall_at_5', 'valid_mrr_at_5', 'tfidf_cs_at_1', 'tfidf_cs_at_5']
 
 def init_timings():
     timings = {}
@@ -237,11 +237,14 @@ def main(args):
                 valid_data.start()
                 valid_cost = 0
                 valid_misclass = 0
+                valid_empirical_mutual_information = 0
                 valid_done = 0
 
-                # Prepare variables for plotting histogram over log-likelihoods
+                # Prepare variables for plotting histogram over word-perplexities and mutual information
                 valid_data_len = valid_data.data_len
                 valid_cost_list = numpy.zeros((valid_data_len,))
+                valid_pmi_list = numpy.zeros((valid_data_len,))
+
 
                 # Prepare variables for printing the training examples the model performs best and worst on
                 valid_extrema_setsize = min(state['track_extrema_samples_count'], valid_data_len)
@@ -298,12 +301,31 @@ def main(args):
                         continue
 
                     valid_misclass += miscl
+
+                    # Compute empirical mutual information
+                    if state['compute_mutual_information'] == True:
+                        # Compute marginal log-likelihood of last utterance in triple:
+                        # We approximate it with the margina log-probabiltiy of the utterance being observed first in the triple
+                        x_data_last_utterance = batch['x_last_utterance']
+                        x_cost_mask_last_utterance = batch['x_mask_last_utterance']
+                        marginal_last_utterance_loglikelihood, marginal_last_utterance_loglikelihood_list = eval_batch(x_data_last_utterance, max_length, x_cost_mask_last_utterance)
+
+                        # Compute marginal log-likelihood of first utterances in triple by masking the last utterance
+                        x_cost_mask_first_utterances = x_cost_mask - x_cost_mask_last_utterance
+                        marginal_first_utterances_loglikelihood, marginal_first_utterances_loglikelihood_list = eval_batch(x_data, max_length, x_cost_mask_first_utterances)
+
+                        # Compute empirical mutual information and pointwise empirical mutual information
+                        valid_empirical_mutual_information += -c + marginal_first_utterances_loglikelihood + marginal_last_utterance_loglikelihood
+                        valid_pmi_list[valid_done:nxt] = (-c_list + marginal_first_utterances_loglikelihood_list + marginal_last_utterance_loglikelihood_list)[0:(nxt-valid_done)]
+
                     valid_done += batch['num_preds']
 
                 logger.debug("[VALIDATION END]") 
                  
                 valid_cost /= valid_done 
                 valid_misclass /= float(valid_done)
+                valid_empirical_mutual_information /= float(valid_done)
+
 
                 if len(timings["valid_cost"]) == 0 or valid_cost < timings["valid_cost"][-1]:
                     patience = state['patience']
@@ -312,13 +334,15 @@ def main(args):
                 elif valid_cost >= timings["valid_cost"][-1] * state['cost_threshold']:
                     patience -= 1
 
-                print "** valid cost = %.4f, valid word-perplexity = %.4f, valid mean word-error = %.4f, patience = %d" % (float(valid_cost), float(math.exp(valid_cost)), float(valid_misclass), patience)
-      
+                print "** valid cost = %.4f, valid word-perplexity = %.4f, valid mean word-error = %.4f, valid emp. mutual information = %.4f, patience = %d" % (float(valid_cost), float(math.exp(valid_cost)), float(valid_misclass), valid_empirical_mutual_information, patience)
 
                 timings["train_cost"].append(train_cost/train_done)
                 timings["train_misclass"].append(float(train_misclass)/float(train_done))
                 timings["valid_cost"].append(valid_cost)
                 timings["valid_misclass"].append(valid_misclass)
+                timings["valid_emi"].append(valid_empirical_mutual_information)
+
+
 
                 # Reset train cost, train misclass and train done
                 train_cost = 0
@@ -327,8 +351,8 @@ def main(args):
 
                 # Plot histogram over validation costs
                 pylab.figure()
-                bins = range(0, 50, 2)
-                pylab.hist(valid_cost_list, bins, normed=1, histtype='bar')
+                #bins = range(0, 50, 1)
+                pylab.hist(valid_cost_list, normed=1, histtype='bar')
                 pylab.savefig(model.state['save_dir'] + '/' + model.state['run_id'] + "_" + model.state['prefix'] + 'Valid_WordPerplexities_'+ str(step) + '.png')
 
                 # Print 5 of 10% validation samples with highest log-likelihood
@@ -343,8 +367,12 @@ def main(args):
                     for i in range(valid_extrema_samples_to_print):
                         print "      {}".format(" ".join(model.indices_to_words(numpy.ravel(valid_highest_triples[i,:]))))
 
-
-
+                # Plot histogram over empirical pointwise mutual informations
+                if state['compute_mutual_information'] == True:
+                    pylab.figure()
+                    #bins = range(0, 100, 1)
+                    pylab.hist(valid_pmi_list, normed=1, histtype='bar')
+                    pylab.savefig(model.state['save_dir'] + '/' + model.state['run_id'] + "_" + model.state['prefix'] + 'Valid_PMI_'+ str(step) + '.png')
 
 
 
@@ -380,7 +408,7 @@ def main(args):
 
             mrr_at_5 = mrr_at_5_eval.evaluate(samples, targets)
 
-            # MRR evaluation
+            # MRR evaluation (equivalent to mean average precision)
             print "** mrr@5 score = %.4f " % mrr_at_5
             timings["valid_mrr_at_5"].append(mrr_at_5)
 

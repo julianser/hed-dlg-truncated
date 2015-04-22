@@ -718,7 +718,7 @@ class DialogEncoderDecoder(Model):
         # Extract document (triple) frequency for each word
         self.word_freq = dict([(tok_id, freq) for _, tok_id, freq, _ in raw_dict])
         self.document_freq = dict([(tok_id, df) for _, tok_id, _, df in raw_dict])
-        print 'self.document_freq', self.document_freq
+
         if '</s>' not in self.str_to_idx \
            or '<s>' not in self.str_to_idx:
                 raise Exception("Error, malformed dictionary!")
@@ -771,7 +771,7 @@ class DialogEncoderDecoder(Model):
         self.contrastive_cost = T.sum(contrastive_cost.flatten() * training_x_cost_mask)
         self.softmax_cost = -T.log(target_probs) * training_x_cost_mask
         self.softmax_cost_acc = T.sum(self.softmax_cost)
-        
+
         # Mean squared error
         self.training_cost = self.softmax_cost_acc
         if self.use_nce:
@@ -780,19 +780,6 @@ class DialogEncoderDecoder(Model):
 
         # Prediction accuracy
         self.training_misclassification = T.sum(T.neq(T.argmax(target_probs_full_matrix, axis=2), training_y).flatten() * training_x_cost_mask)
-
-#T.sum(T.neq(T.argmax(target_probs_full_matrix, axis=2), self.training_y).flatten() * training_x_cost_mask)
-
-
-#T.sum(T.mean(T.neq(T.argmax(target_probs_full_matrix, axis=2), self.training_y).flatten() * training_x_cost_mask, axis=0))
-
-#T.sum(T.neq(T.argmax(target_probs_full_matrix, axis=2), self.x_data[:self.x_max_length]) * self.x_cost_mask[:self.x_max_length])
-
-
-                                          
-
-
-
 
         # Sampling variables
         self.n_samples = T.iscalar("n_samples")
