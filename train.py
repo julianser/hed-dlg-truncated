@@ -278,13 +278,12 @@ def main(args):
                     
 
                     c, c_list = eval_batch(x_data, max_length, x_cost_mask)
-                    
-                    c_list = c_list.reshape((batch['x'].shape[1],max_length), order=(1,0))                    
+                    c_list = c_list.reshape((batch['x'].shape[1],max_length), order=(1,0))
                     c_list = numpy.sum(c_list, axis=1)
-
-                    # Normalize log-likelihoods by number of words in each sentence
+                    
                     words_in_triples = numpy.sum(x_cost_mask, axis=0)
                     c_list = c_list / words_in_triples
+                    
 
                     if numpy.isinf(c) or numpy.isnan(c):
                         continue
@@ -297,7 +296,7 @@ def main(args):
                     valid_cost_list[(nxt-triples_in_batch):nxt] = numpy.exp(c_list[0:triples_in_batch])
 
 
-                    # Store best and worst validation costs
+                    # Store best and worst validation costs                    
                     con_costs = np.concatenate([valid_lowest_costs, c_list[0:triples_in_batch]])
                     con_triples = np.concatenate([valid_lowest_triples, x_data[:, 0:triples_in_batch].T], axis=0)
                     con_indices = con_costs.argsort()[0:valid_extrema_setsize][::1]
@@ -327,6 +326,9 @@ def main(args):
                         marginal_last_utterance_loglikelihood, marginal_last_utterance_loglikelihood_list = eval_batch(x_data_last_utterance, max_length, x_cost_mask_last_utterance)
                         marginal_last_utterance_loglikelihood_list = marginal_last_utterance_loglikelihood_list.reshape((batch['x'].shape[1],max_length), order=(1,0))
                         marginal_last_utterance_loglikelihood_list = numpy.sum(marginal_last_utterance_loglikelihood_list, axis=1)
+                        # If we wanted to normalize histogram plots by utterance length, we should enable this:
+                        #words_in_last_utterance = numpy.sum(x_cost_mask_last_utterance, axis=0)
+                        #marginal_last_utterance_loglikelihood_list = marginal_last_utterance_loglikelihood_list / words_in_last_utterance
 
                         # Compute marginal log-likelihood of first utterances in triple by masking the last utterance
                         x_cost_mask_first_utterances = x_cost_mask - x_cost_mask_last_utterance
@@ -335,9 +337,14 @@ def main(args):
                         marginal_first_utterances_loglikelihood_list = marginal_first_utterances_loglikelihood_list.reshape((batch['x'].shape[1],max_length), order=(1,0))
                         marginal_first_utterances_loglikelihood_list = numpy.sum(marginal_first_utterances_loglikelihood_list, axis=1)
 
+                        # If we wanted to normalize histogram plots by utterance length, we should enable this:
+                        #words_in_first_utterances = numpy.sum(x_cost_mask_first_utterances, axis=0)
+                        #marginal_first_utterances_loglikelihood_list = marginal_first_utterances_loglikelihood_list / words_in_first_utterances
+
+
                         # Compute empirical mutual information and pointwise empirical mutual information
                         valid_empirical_mutual_information += -c + marginal_first_utterances_loglikelihood + marginal_last_utterance_loglikelihood
-                        valid_pmi_list[(nxt-triples_in_batch):nxt] = (-c_list + marginal_first_utterances_loglikelihood_list + marginal_last_utterance_loglikelihood_list)[0:triples_in_batch]
+                        valid_pmi_list[(nxt-triples_in_batch):nxt] = (-c_list*words_in_triples + marginal_first_utterances_loglikelihood_list + marginal_last_utterance_loglikelihood_list)[0:triples_in_batch]
 
                     valid_wordpreds_done += batch['num_preds']
                     valid_triples_done += batch['x'].shape[1]
@@ -365,6 +372,8 @@ def main(args):
                 timings["valid_misclass"].append(valid_misclass)
                 timings["valid_emi"].append(valid_empirical_mutual_information)
 
+
+
                 # Reset train cost, train misclass and train done
                 train_cost = 0
                 train_misclass = 0
@@ -373,28 +382,30 @@ def main(args):
                 # Plot histogram over validation costs
                 try:
                     pylab.figure()
+                    bins = range(0, 50, 1)
                     pylab.hist(valid_cost_list, normed=1, histtype='bar')
                     pylab.savefig(model.state['save_dir'] + '/' + model.state['run_id'] + "_" + model.state['prefix'] + 'Valid_WordPerplexities_'+ str(step) + '.png')
                 except:
                     pass
 
 
-                # Print 5 of the 100 validation samples with highest and lowest log-likelihood
+                # Print 5 of 10% validation samples with highest log-likelihood
                 if state['track_extrema_validation_samples']==True:
                     print " highest word log-likelihood valid samples: " 
                     np.random.shuffle(valid_lowest_triples)
                     for i in range(valid_extrema_samples_to_print):
-                        print "      {}".format(" ".join(model.indices_to_words(numpy.ravel(valid_lowest_triples[i,:]))))
+                        print "      Sample: {}".format(" ".join(model.indices_to_words(numpy.ravel(valid_lowest_triples[i,:]))))
 
                     print " lowest word log-likelihood valid samples: " 
                     np.random.shuffle(valid_highest_triples)
                     for i in range(valid_extrema_samples_to_print):
-                        print "      {}".format(" ".join(model.indices_to_words(numpy.ravel(valid_highest_triples[i,:]))))
+                        print "      Sample: {}".format(" ".join(model.indices_to_words(numpy.ravel(valid_highest_triples[i,:]))))
 
                 # Plot histogram over empirical pointwise mutual informations
                 if state['compute_mutual_information'] == True:
                     try:
                         pylab.figure()
+                        bins = range(0, 100, 1)
                         pylab.hist(valid_pmi_list, normed=1, histtype='bar')
                         pylab.savefig(model.state['save_dir'] + '/' + model.state['run_id'] + "_" + model.state['prefix'] + 'Valid_PMI_'+ str(step) + '.png')
                     except:
@@ -405,11 +416,15 @@ def main(args):
         if 'bleu_evaluation' in state and \
             step % state['valid_freq'] == 0 and step > 1:
 
-            # Bleu evaluation
+            # Compute samples with beam search
+            logger.debug("Executing beam search to get targets for bleu, jaccard etc.")
             samples, costs = beam_sampler.sample(contexts, n_samples=5, ignore_unk=True)
+            logger.debug("Finished beam search.")
+
             assert len(samples) == len(contexts)
             #print 'samples', samples
              
+            # Bleu evaluation
             bleu = bleu_eval.evaluate(samples, targets)
              
             print "** bleu score = %.4f " % bleu[0] 

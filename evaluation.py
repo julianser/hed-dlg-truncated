@@ -245,8 +245,19 @@ class RecallEvaluator(object):
 
         self.recall.reset()
         for ts, ps in zip(target, prediction):
-            assert(len(ps) >= self.n)
-            self.recall.update(ps[0:self.n], *ts)
+            #assert(len(ps) >= self.n)
+            # Replace missing samples with last sample instead of throwing an error
+            samples_len = len(ps)
+            if samples_len >= self.n:
+                ps_complete = ps[0:self.n]
+            else:
+                ps_complete = ps[0:samples_len]
+                miss = self.n - samples_len
+                last_element = ps[samples_len-1]
+                for i in range(miss):
+                    ps_complete.append(last_element)
+
+            self.recall.update(ps_complete, *ts)
 
         return self.recall.compute()
 
@@ -303,8 +314,19 @@ class MRREvaluator(object):
 
         self.mrr.reset()
         for ts, ps in zip(target, prediction):
-            assert(len(ps) >= self.n)
-            self.mrr.update(ps[0:self.n], *ts)
+            #assert(len(ps) >= self.n)
+            # Replace missing samples with last sample instead of throwing an error
+            samples_len = len(ps)
+            if samples_len >= self.n:
+                ps_complete = ps[0:self.n]
+            else:
+                ps_complete = ps[0:samples_len]
+                miss = self.n - samples_len
+                last_element = ps[samples_len-1]
+                for i in range(miss):
+                    ps_complete.append(last_element)
+
+            self.mrr.update(ps_complete, *ts)
 
         return self.mrr.compute()
 
@@ -412,7 +434,18 @@ class TFIDF_CS_Evaluator(object):
 
         self.tfidf_cs.reset()
         for ts, ps in zip(target, prediction):
-            assert(len(ps) >= self.n)
-            self.tfidf_cs.update(ps[0:self.n], *ts)
+            #assert(len(ps) >= self.n)
+            # Replace missing samples with last sample instead of throwing an error
+            samples_len = len(ps)
+            if samples_len >= self.n:
+                ps_complete = ps[0:self.n]
+            else:
+                ps_complete = ps[0:samples_len]
+                miss = self.n - samples_len
+                last_element = ps[samples_len-1]
+                for i in range(miss):
+                    ps_complete.append(last_element)
+
+            self.tfidf_cs.update(ps_complete, *ts)
 
         return self.tfidf_cs.compute()
