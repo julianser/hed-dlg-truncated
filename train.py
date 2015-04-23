@@ -20,6 +20,10 @@ import numpy
 import collections
 import signal
 import math
+
+
+import matplotlib
+matplotlib.use('Agg')
 import pylab
 
 
@@ -238,7 +242,9 @@ def main(args):
                 valid_cost = 0
                 valid_misclass = 0
                 valid_empirical_mutual_information = 0
-                valid_done = 0
+                valid_wordpreds_done = 0
+                valid_triples_done = 0
+
 
                 # Prepare variables for plotting histogram over word-perplexities and mutual information
                 valid_data_len = valid_data.data_len
@@ -272,24 +278,34 @@ def main(args):
                     
 
                     c, c_list = eval_batch(x_data, max_length, x_cost_mask)
+                    
+                    c_list = c_list.reshape((batch['x'].shape[1],max_length), order=(1,0))                    
+                    c_list = numpy.sum(c_list, axis=1)
+
+                    # Normalize log-likelihoods by number of words in each sentence
+                    words_in_triples = numpy.sum(x_cost_mask, axis=0)
+                    c_list = c_list / words_in_triples
+
                     if numpy.isinf(c) or numpy.isnan(c):
                         continue
                     
                     valid_cost += c
 
                     # Store validation costs in list
-                    nxt = min((valid_done+batch['num_preds']), valid_data_len)
-                    valid_cost_list[valid_done:nxt] = numpy.exp(c_list[0:(nxt-valid_done)])                   
+                    nxt =  min((valid_triples_done+batch['x'].shape[1]), valid_data_len)
+                    triples_in_batch = nxt-valid_triples_done
+                    valid_cost_list[(nxt-triples_in_batch):nxt] = numpy.exp(c_list[0:triples_in_batch])
+
 
                     # Store best and worst validation costs
-                    con_costs = np.concatenate([valid_lowest_costs, c_list[0:(nxt-valid_done)]])
-                    con_triples = np.concatenate([valid_lowest_triples, x_data[:, 0:(nxt-valid_done)].T])
+                    con_costs = np.concatenate([valid_lowest_costs, c_list[0:triples_in_batch]])
+                    con_triples = np.concatenate([valid_lowest_triples, x_data[:, 0:triples_in_batch].T], axis=0)
                     con_indices = con_costs.argsort()[0:valid_extrema_setsize][::1]
                     valid_lowest_costs = con_costs[con_indices]
                     valid_lowest_triples = con_triples[con_indices]
 
-                    con_costs = np.concatenate([valid_highest_costs, c_list[0:(nxt-valid_done)]])
-                    con_triples = np.concatenate([valid_highest_triples, x_data[:, 0:(nxt-valid_done)].T])
+                    con_costs = np.concatenate([valid_highest_costs, c_list[0:triples_in_batch]])
+                    con_triples = np.concatenate([valid_highest_triples, x_data[:, 0:triples_in_batch].T], axis=0)
                     con_indices = con_costs.argsort()[-valid_extrema_setsize:][::-1]
                     valid_highest_costs = con_costs[con_indices]
                     valid_highest_triples = con_triples[con_indices]
@@ -309,22 +325,29 @@ def main(args):
                         x_data_last_utterance = batch['x_last_utterance']
                         x_cost_mask_last_utterance = batch['x_mask_last_utterance']
                         marginal_last_utterance_loglikelihood, marginal_last_utterance_loglikelihood_list = eval_batch(x_data_last_utterance, max_length, x_cost_mask_last_utterance)
+                        marginal_last_utterance_loglikelihood_list = marginal_last_utterance_loglikelihood_list.reshape((batch['x'].shape[1],max_length), order=(1,0))
+                        marginal_last_utterance_loglikelihood_list = numpy.sum(marginal_last_utterance_loglikelihood_list, axis=1)
 
                         # Compute marginal log-likelihood of first utterances in triple by masking the last utterance
                         x_cost_mask_first_utterances = x_cost_mask - x_cost_mask_last_utterance
                         marginal_first_utterances_loglikelihood, marginal_first_utterances_loglikelihood_list = eval_batch(x_data, max_length, x_cost_mask_first_utterances)
 
+                        marginal_first_utterances_loglikelihood_list = marginal_first_utterances_loglikelihood_list.reshape((batch['x'].shape[1],max_length), order=(1,0))
+                        marginal_first_utterances_loglikelihood_list = numpy.sum(marginal_first_utterances_loglikelihood_list, axis=1)
+
                         # Compute empirical mutual information and pointwise empirical mutual information
                         valid_empirical_mutual_information += -c + marginal_first_utterances_loglikelihood + marginal_last_utterance_loglikelihood
-                        valid_pmi_list[valid_done:nxt] = (-c_list + marginal_first_utterances_loglikelihood_list + marginal_last_utterance_loglikelihood_list)[0:(nxt-valid_done)]
+                        valid_pmi_list[(nxt-triples_in_batch):nxt] = (-c_list + marginal_first_utterances_loglikelihood_list + marginal_last_utterance_loglikelihood_list)[0:triples_in_batch]
 
-                    valid_done += batch['num_preds']
+                    valid_wordpreds_done += batch['num_preds']
+                    valid_triples_done += batch['x'].shape[1]
+
 
                 logger.debug("[VALIDATION END]") 
                  
-                valid_cost /= valid_done 
-                valid_misclass /= float(valid_done)
-                valid_empirical_mutual_information /= float(valid_done)
+                valid_cost /= valid_wordpreds_done
+                valid_misclass /= float(valid_wordpreds_done)
+                valid_empirical_mutual_information /= float(valid_triples_done)
 
 
                 if len(timings["valid_cost"]) == 0 or valid_cost < timings["valid_cost"][-1]:
@@ -342,37 +365,40 @@ def main(args):
                 timings["valid_misclass"].append(valid_misclass)
                 timings["valid_emi"].append(valid_empirical_mutual_information)
 
-
-
                 # Reset train cost, train misclass and train done
                 train_cost = 0
                 train_misclass = 0
                 train_done = 0
 
                 # Plot histogram over validation costs
-                pylab.figure()
-                #bins = range(0, 50, 1)
-                pylab.hist(valid_cost_list, normed=1, histtype='bar')
-                pylab.savefig(model.state['save_dir'] + '/' + model.state['run_id'] + "_" + model.state['prefix'] + 'Valid_WordPerplexities_'+ str(step) + '.png')
+                try:
+                    pylab.figure()
+                    pylab.hist(valid_cost_list, normed=1, histtype='bar')
+                    pylab.savefig(model.state['save_dir'] + '/' + model.state['run_id'] + "_" + model.state['prefix'] + 'Valid_WordPerplexities_'+ str(step) + '.png')
+                except:
+                    pass
 
-                # Print 5 of 10% validation samples with highest log-likelihood
+
+                # Print 5 of the 100 validation samples with highest and lowest log-likelihood
                 if state['track_extrema_validation_samples']==True:
-                    print " lowest log-likelihood valid samples: " 
+                    print " highest word log-likelihood valid samples: " 
                     np.random.shuffle(valid_lowest_triples)
                     for i in range(valid_extrema_samples_to_print):
                         print "      {}".format(" ".join(model.indices_to_words(numpy.ravel(valid_lowest_triples[i,:]))))
 
-                    print " highest log-likelihood valid samples: " 
+                    print " lowest word log-likelihood valid samples: " 
                     np.random.shuffle(valid_highest_triples)
                     for i in range(valid_extrema_samples_to_print):
                         print "      {}".format(" ".join(model.indices_to_words(numpy.ravel(valid_highest_triples[i,:]))))
 
                 # Plot histogram over empirical pointwise mutual informations
                 if state['compute_mutual_information'] == True:
-                    pylab.figure()
-                    #bins = range(0, 100, 1)
-                    pylab.hist(valid_pmi_list, normed=1, histtype='bar')
-                    pylab.savefig(model.state['save_dir'] + '/' + model.state['run_id'] + "_" + model.state['prefix'] + 'Valid_PMI_'+ str(step) + '.png')
+                    try:
+                        pylab.figure()
+                        pylab.hist(valid_pmi_list, normed=1, histtype='bar')
+                        pylab.savefig(model.state['save_dir'] + '/' + model.state['run_id'] + "_" + model.state['prefix'] + 'Valid_PMI_'+ str(step) + '.png')
+                    except:
+                        pass
 
 
 
