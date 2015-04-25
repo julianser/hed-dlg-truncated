@@ -203,7 +203,7 @@ def main(args):
             c = train_batch(x_data, y_neg, max_length, x_cost_mask)
         else:
             c = train_batch(x_data, max_length, x_cost_mask)
-        
+
         if numpy.isinf(c) or numpy.isnan(c):
             logger.warn("Got NaN cost .. skipping")
             continue

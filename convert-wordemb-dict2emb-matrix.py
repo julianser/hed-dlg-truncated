@@ -37,6 +37,9 @@ def safe_pickle(obj, filename):
         logger.info("Overwriting %s." % filename)
     else:
         logger.info("Saving to %s." % filename)
+
+    with open(filename, 'wb') as f:
+        cPickle.dump(obj, f, protocol=cPickle.HIGHEST_PROTOCOL)
    
 def edits1(word):
     splits     = [(word[:i], word[i:]) for i in range(len(word) + 1)]
@@ -57,13 +60,18 @@ parser.add_argument("embedding_dictionary", type=str, help="Python vocabulary (p
 parser.add_argument("--emb_dim", type=int, default=300, help="Dimensionality of the generated word embedding matrix. PCA is performed to reduce dimensionality to this size.")
 parser.add_argument("--std_dev", type=float, default=0.01, help="Standard deviation of the produced word embedding.")
 
-parser.add_argument("--apply_spelling_corrections", action='store_false', help="If true, will apply spelling corrections to all words not found in the pretrained word embedding dictionary. These corrections are based on regex expressions and the enchant spelling corrector.")
+parser.add_argument("--apply_spelling_corrections", action='store_true', help="If true, will apply spelling corrections to all words not found in the pretrained word embedding dictionary. These corrections are based on regex expressions and the enchant spelling corrector.")
 
 
 parser.add_argument("output_matrix", type=str, help="Generated word embedding matrix (pkl file)")
 
 
 args = parser.parse_args()
+
+if args.apply_spelling_corrections:
+    logger.info("Applying spelling corrections")
+else:
+    logger.info("No spelling corrections will be applied")
 
 emb_dim = args.emb_dim
 logger.info("Final word embedding dim: %d" % emb_dim)
@@ -96,6 +104,8 @@ logger.info("Raw word embedding dim: %d" % raw_emb_dim)
 W_emb_raw = numpy.zeros((i_dim, raw_emb_dim))
 
 words_found = 0
+unique_word_indices_found = []
+
 unique_words_left_out = []
 unique_word_indices_left_out = []
 word_freq_left_out = []
@@ -108,9 +118,11 @@ for key in str_to_idx.iterkeys():
     total_freq = total_freq + word_freq[index]
     if key in embedding_dict:
         W_emb_raw[index, :] = embedding_dict[key]
+        unique_word_indices_found.append(index)
         words_found = words_found + 1
     elif key.title() in embedding_dict: # Check if word with capital first letter exists in word embedding dict
         W_emb_raw[index, :] = embedding_dict[key.title()]
+        unique_word_indices_found.append(index)
         words_found = words_found + 1
     else:
         word_was_found = False
@@ -143,7 +155,9 @@ for key in str_to_idx.iterkeys():
                         print 'Correcting ' + str(key) + ' -> ' + str(suggestion)
                         break
 
-        if word_was_found == False:
+        if word_was_found == True:
+            unique_word_indices_found.append(index)
+        elif word_was_found == False:
             unique_words_left_out.append(key)
             unique_word_indices_left_out.append(index)
             word_freq_left_out.append(word_freq[index])
@@ -165,9 +179,13 @@ assert(raw_emb_dim >= emb_dim)
 # Use PCA to reduce dimensionality appropriately
 if raw_emb_dim > emb_dim:
     pca = PCA(n_components=emb_dim)
-    W_emb = pca.fit_transform(W_emb_raw)
+    W_emb = numpy.zeros((i_dim, emb_dim))
+    W_emb[unique_word_indices_found, :] = pca.fit_transform(W_emb_raw[unique_word_indices_found])
 else: # raw_emb_dim == emb_dim:
     W_emb = W_emb_raw
+
+# Set mean to zero and standard deviation to 0.01
+W_emb[unique_word_indices_found, :] = preprocessing.scale(W_emb[unique_word_indices_found], with_std=std_dev)
 
 # Initialize words without embeddings randomly
 seed = 123456
@@ -175,9 +193,6 @@ rng = numpy.random.RandomState(seed)
 randmat = NormalInit(rng, unique_words_missing, emb_dim)
 for i in range(unique_words_missing):
     W_emb[unique_word_indices_left_out[i], :] = randmat[i, :]
-
-# Set mean to zero and standard deviation to 0.01
-W_emb = preprocessing.scale(W_emb, with_std=std_dev)
 
 # Create mask matrix, which represents word embeddings not pretrained
 W_emb_nonpretrained_mask = numpy.zeros((i_dim, emb_dim))

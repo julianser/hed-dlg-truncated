@@ -4,7 +4,7 @@ The code is inspired from nmt encdec code in groundhog
 but we do not rely on groundhog infrastructure.
 """
 __docformat__ = 'restructedtext en'
-__authors__ = ("Alessandro Sordoni")
+__authors__ = ("Alessandro Sordoni, Iulian Vlad Serban")
 __contact__ = "Alessandro Sordoni <sordonia@iro.umontreal>"
 
 import theano
@@ -48,7 +48,24 @@ class EncoderDecoderBase():
 class Encoder(EncoderDecoderBase):
     def init_params(self):
         """ sent weights """
-        self.W_emb = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.idim, self.rankdim), name='W_emb'))
+
+        if self.initialize_from_pretrained_word_embeddings == True:
+            # Load pretrained word embeddings from pickled file
+            logger.debug("Loading pretrained word embeddings")
+            pretrained_embeddings = cPickle.load(open(self.pretrained_word_embeddings_file, 'r'))
+
+            # Check all dimensions match from the pretrained embeddings
+            assert(self.idim == pretrained_embeddings[0].shape[0])
+            assert(self.rankdim == pretrained_embeddings[0].shape[1])
+            assert(self.idim == pretrained_embeddings[1].shape[0])
+            assert(self.rankdim == pretrained_embeddings[1].shape[1])
+
+            self.W_emb_pretrained_mask = theano.shared(pretrained_embeddings[1].astype(numpy.float32), name='W_emb_mask')
+            self.W_emb = add_to_params(self.params, theano.shared(value=pretrained_embeddings[0].astype(numpy.float32), name='W_emb'))
+        else:
+            self.W_emb = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.idim, self.rankdim), name='W_emb'))
+            
+
         self.W_in = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='W_in'))
         self.W_hh = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='W_hh'))
         self.b_hh = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='b_hh'))
@@ -597,7 +614,7 @@ class DialogEncoderDecoder(Model):
          
         grads = T.grad(training_cost, params)
         grads = OrderedDict(zip(params, grads))
-        
+
         # Clip stuff
         c = numpy.float32(self.cutoff)
         clip_grads = []
@@ -611,6 +628,10 @@ class DialogEncoderDecoder(Model):
         
         grads = OrderedDict(clip_grads)
 
+        if self.initialize_from_pretrained_word_embeddings and self.fix_pretrained_word_embeddings:
+            # Keep pretrained word embeddings fixed
+            grads[self.encoder.W_emb] = grads[self.encoder.W_emb] * self.encoder.W_emb_pretrained_mask
+            
         if self.updater == 'adagrad':
             updates = Adagrad(grads, self.lr)  
         elif self.updater == 'sgd':
@@ -776,6 +797,7 @@ class DialogEncoderDecoder(Model):
         self.training_cost = self.softmax_cost_acc
         if self.use_nce:
             self.training_cost = self.contrastive_cost
+
         self.updates = self.compute_updates(self.training_cost / training_x.shape[1], self.params)
 
         # Prediction accuracy

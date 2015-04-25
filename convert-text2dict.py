@@ -3,7 +3,7 @@ Takes as input a triple file and creates a processed version of it.
 If given an external dictionary, the input triple file will be converted
 using that input dictionary.
 
-@author Alessandro Sordoni
+@author Alessandro Sordoni, Iulian Vlad Serban
 """
 
 import collections
