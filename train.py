@@ -361,7 +361,7 @@ def main(args):
                 valid_empirical_mutual_information /= float(valid_triples_done)
 
 
-                if len(timings["valid_cost"]) == 0 or valid_cost < timings["valid_cost"][-1]:
+                if len(timings["valid_cost"]) == 0 or valid_cost < numpy.min(timings["valid_cost"]):
                     patience = state['patience']
                     # Saving model if decrease in validation cost
                     save(model, timings)
