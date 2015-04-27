@@ -630,7 +630,10 @@ class DialogEncoderDecoder(Model):
 
         if self.initialize_from_pretrained_word_embeddings and self.fix_pretrained_word_embeddings:
             # Keep pretrained word embeddings fixed
+            logger.debug("Will use mask to fix pretrained word embeddings")
             grads[self.encoder.W_emb] = grads[self.encoder.W_emb] * self.encoder.W_emb_pretrained_mask
+        else:
+            logger.debug("Will train all word embeddings")
             
         if self.updater == 'adagrad':
             updates = Adagrad(grads, self.lr)  

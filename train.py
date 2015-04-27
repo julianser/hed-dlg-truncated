@@ -104,7 +104,10 @@ def main(args):
 
     logger.debug("State:\n{}".format(pprint.pformat(state)))
     logger.debug("Timings:\n{}".format(pprint.pformat(timings)))
-       
+ 
+    if args.force_train_all_wordemb == True:
+        state['fix_pretrained_word_embeddings'] = False
+
     model = DialogEncoderDecoder(state)
     rng = model.rng 
 
@@ -117,7 +120,8 @@ def main(args):
             raise Exception("Cannot resume, cannot find model file!")
         
         if 'run_id' not in model.state:
-            raise Exception('Backward compatibility not ensured! (need run_id in state)')
+            raise Exception('Backward compatibility not ensured! (need run_id in state)')           
+
     else:
         # assign new run_id key
         model.state['run_id'] = RUN_ID
@@ -471,6 +475,8 @@ def main(args):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--resume", type=str, default="", help="Resume training from that state")
+    parser.add_argument("--force_train_all_wordemb", action='store_true', help="If true, will force the model to train all word embeddings in the coder. This switch can be used to fine-tune a model which was trained with fixed (pretrained)  encoder word embeddings.")
+
     parser.add_argument("--prototype", type=str, help="Use the prototype", default='prototype_state')
 
     args = parser.parse_args()

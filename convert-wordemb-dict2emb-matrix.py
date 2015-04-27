@@ -257,3 +257,4 @@ for i in range(unique_words_missing):
     W_emb_nonpretrained_mask[unique_word_indices_left_out[i], :] = 1
 
 safe_pickle([W_emb, W_emb_nonpretrained_mask], args.output_matrix + ".pkl")
+
