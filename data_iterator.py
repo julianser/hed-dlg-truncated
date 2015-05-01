@@ -26,6 +26,8 @@ def create_padded_batch(state, x):
     # Variables to store last utterance (used to compute mutual information metric)
     X_last_utterance = numpy.zeros((mx, n), dtype='int32')
     Xmask_last_utterance = numpy.zeros((mx, n), dtype='float32') 
+    X_start_of_last_utterance = numpy.zeros((n), dtype='int32') 
+
 
     # Fill X and Xmask
     # Keep track of number of predictions and maximum triple length
@@ -58,15 +60,17 @@ def create_padded_batch(state, x):
         eos_indices = numpy.where(X[:, idx] == state['eos_sym'])[0]
         assert (len(eos_indices) > 2)
         start_of_last_utterance = eos_indices[1]+1
+        X_start_of_last_utterance[idx] = start_of_last_utterance
         X_last_utterance[0:(triple_length-start_of_last_utterance), idx] = X[start_of_last_utterance:triple_length, idx]
         Xmask_last_utterance[0:(triple_length-start_of_last_utterance), idx] = Xmask[start_of_last_utterance:triple_length, idx]
+     
 
 
- 
+
 
      
     assert num_preds == numpy.sum(Xmask)
-    return {'x': X, 'x_mask': Xmask, 'x_last_utterance': X_last_utterance, 'x_mask_last_utterance': Xmask_last_utterance, 'num_preds': num_preds, 'max_length': max_length}
+    return {'x': X, 'x_mask': Xmask, 'x_last_utterance': X_last_utterance, 'x_mask_last_utterance': Xmask_last_utterance, 'x_start_of_last_utterance': X_start_of_last_utterance, 'num_preds': num_preds, 'max_length': max_length}
 
 def get_batch_iterator(rng, state):
     class Iterator(SSIterator):

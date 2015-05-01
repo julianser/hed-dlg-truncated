@@ -1,8 +1,8 @@
 """
-Computes BLEU@n / Jaccard. 
+Computes BLEU@n, Jaccard, Recall, MRR, TF-IDF Cosine Similarity etc.
 """
 __docformat__ = 'restructedtext en'
-__authors__ = ("Alessandro Sordoni")
+__authors__ = ("Alessandro Sordoni, Iulian Vlad Serban")
 __contact__ = "Alessandro Sordoni <sordonia@iro.umontreal>"
 
 import sys
@@ -89,8 +89,8 @@ class Jaccard:
 class JaccardEvaluator(object):
     """ Jaccard evaluator
     """
-    def __init__(self):
-        self.jaccard = Jaccard()
+    def __init__(self, n=3):
+        self.jaccard = Jaccard(n)
 
     def evaluate(self, prediction, target):
         if len(target) != len(prediction):
@@ -137,10 +137,10 @@ class Bleu:
     def update(self, candidate, *refs):
         refs = [normalize(ref) for ref in refs]
         candidate = normalize(candidate)
-        
+
         stats = numpy.zeros((2 * self.n + 1,))	
         stats[-1] = get_ref_length(map(len, refs), len(candidate))
-         
+
         cand_ngram_counts = count_ngrams([candidate], self.n)
         refs_ngram_counts = count_ngrams(refs, self.n)
 
@@ -149,12 +149,12 @@ class Bleu:
         for k in xrange(1, self.n + 1):
             stats[k - 1] = max(len(candidate) - k + 1, 0)
         self.statistics.append(stats)
-	
+
     def compute(self, smoothing=0, length_penalty=1):
         precs = numpy.zeros((self.n + 1,))
         stats = self.aggregate()
         log_bleu = 0.
-        
+
         for k in range(self.n):
             correct = float(stats[self.n + k] + smoothing)
             if correct == 0.:
@@ -162,7 +162,7 @@ class Bleu:
             total = float(stats[k] + 2*smoothing)
             precs[k] = numpy.log(correct) - numpy.log(total)
             log_bleu += precs[k]
-	        
+
         log_bleu /= float(self.n)
         stats[-1] = stats[-1] * length_penalty
         log_bleu += min(0, 1 - float(stats[0]/stats[-1]))
@@ -174,8 +174,8 @@ class Bleu:
 class BleuEvaluator(object):
     """ Bleu evaluator
     """
-    def __init__(self):
-        self.bleu = Bleu()
+    def __init__(self, n=4):
+        self.bleu = Bleu(n)
 
     def evaluate(self, prediction, target):
         if len(target) != len(prediction):

@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 RUN_ID = str(time.time())
 
 ### Additional measures can be set here
-measures = ["train_cost", "train_misclass", "valid_cost", "valid_misclass", "valid_emi", "valid_bleu", 'valid_jaccard', 'valid_recall_at_1', 'valid_recall_at_5', 'valid_mrr_at_5', 'tfidf_cs_at_1', 'tfidf_cs_at_5']
+measures = ["train_cost", "train_misclass", "valid_cost", "valid_misclass", "valid_emi", "valid_bleu_n_1", "valid_bleu_n_2", "valid_bleu_n_3", "valid_bleu_n_4", 'valid_jaccard', 'valid_recall_at_1', 'valid_recall_at_5', 'valid_mrr_at_5', 'tfidf_cs_at_1', 'tfidf_cs_at_5']
 
 def init_timings():
     timings = {}
@@ -146,7 +146,10 @@ def main(args):
     # Build the data structures for Bleu evaluation
     if 'bleu_evaluation' in state:
         beam_sampler = search.Sampler(model)
-        bleu_eval = BleuEvaluator()
+        bleu_eval_n_1 = BleuEvaluator(n=1)
+        bleu_eval_n_2 = BleuEvaluator(n=2)
+        bleu_eval_n_3 = BleuEvaluator(n=3)
+        bleu_eval_n_4 = BleuEvaluator(n=4)
         jaccard_eval = JaccardEvaluator()
         recall_at_1_eval = RecallEvaluator(n=1)
         recall_at_5_eval = RecallEvaluator(n=5)
@@ -299,7 +302,6 @@ def main(args):
                     triples_in_batch = nxt-valid_triples_done
                     valid_cost_list[(nxt-triples_in_batch):nxt] = numpy.exp(c_list[0:triples_in_batch])
 
-
                     # Store best and worst validation costs                    
                     con_costs = np.concatenate([valid_lowest_costs, c_list[0:triples_in_batch]])
                     con_triples = np.concatenate([valid_lowest_triples, x_data[:, 0:triples_in_batch].T], axis=0)
@@ -312,7 +314,6 @@ def main(args):
                     con_indices = con_costs.argsort()[-valid_extrema_setsize:][::-1]
                     valid_highest_costs = con_costs[con_indices]
                     valid_highest_triples = con_triples[con_indices]
-
 
                     # Compute word-error rate
                     miscl = eval_misclass_batch(x_data, max_length, x_cost_mask)
@@ -327,7 +328,10 @@ def main(args):
                         # We approximate it with the margina log-probabiltiy of the utterance being observed first in the triple
                         x_data_last_utterance = batch['x_last_utterance']
                         x_cost_mask_last_utterance = batch['x_mask_last_utterance']
+                        x_start_of_last_utterance = batch['x_start_of_last_utterance']
+
                         marginal_last_utterance_loglikelihood, marginal_last_utterance_loglikelihood_list = eval_batch(x_data_last_utterance, max_length, x_cost_mask_last_utterance)
+
                         marginal_last_utterance_loglikelihood_list = marginal_last_utterance_loglikelihood_list.reshape((batch['x'].shape[1],max_length), order=(1,0))
                         marginal_last_utterance_loglikelihood_list = numpy.sum(marginal_last_utterance_loglikelihood_list, axis=1)
                         # If we wanted to normalize histogram plots by utterance length, we should enable this:
@@ -335,7 +339,10 @@ def main(args):
                         #marginal_last_utterance_loglikelihood_list = marginal_last_utterance_loglikelihood_list / words_in_last_utterance
 
                         # Compute marginal log-likelihood of first utterances in triple by masking the last utterance
-                        x_cost_mask_first_utterances = x_cost_mask - x_cost_mask_last_utterance
+                        x_cost_mask_first_utterances = numpy.copy(x_cost_mask)
+                        for i in range(batch['x'].shape[1]):
+                            x_cost_mask_first_utterances[x_start_of_last_utterance[i]:max_length, i] = 0
+
                         marginal_first_utterances_loglikelihood, marginal_first_utterances_loglikelihood_list = eval_batch(x_data, max_length, x_cost_mask_first_utterances)
 
                         marginal_first_utterances_loglikelihood_list = marginal_first_utterances_loglikelihood_list.reshape((batch['x'].shape[1],max_length), order=(1,0))
@@ -344,7 +351,6 @@ def main(args):
                         # If we wanted to normalize histogram plots by utterance length, we should enable this:
                         #words_in_first_utterances = numpy.sum(x_cost_mask_first_utterances, axis=0)
                         #marginal_first_utterances_loglikelihood_list = marginal_first_utterances_loglikelihood_list / words_in_first_utterances
-
 
                         # Compute empirical mutual information and pointwise empirical mutual information
                         valid_empirical_mutual_information += -c + marginal_first_utterances_loglikelihood + marginal_last_utterance_loglikelihood
@@ -425,46 +431,62 @@ def main(args):
             samples, costs = beam_sampler.sample(contexts, n_samples=5, ignore_unk=True)
             logger.debug("Finished beam search.")
 
+            # Save beam search samples to file
+            logger.debug("Saving beam search samples to file.")
+            f = open(model.state['save_dir'] + '/' + model.state['run_id'] + "_" + model.state['prefix'] + 'BeamSamples', 'w')
+            for ps in samples:
+                for i in range(len(ps)):
+                    f.write(ps[i] + '\t')
+                f.write('\n')
+
+            logger.debug("Finished saving beam search samples.")
+
+
             assert len(samples) == len(contexts)
             #print 'samples', samples
              
             # Bleu evaluation
-            bleu = bleu_eval.evaluate(samples, targets)
-             
-            print "** bleu score = %.4f " % bleu[0] 
-            timings["valid_bleu"].append(bleu[0])
+            bleu_n_1 = bleu_eval_n_1.evaluate(samples, targets)
+            print "** bleu score (n=4) = %.4f " % bleu_n_1[0] 
+            timings["valid_bleu_n_1"].append(bleu_n_1[0])
+
+            bleu_n_2 = bleu_eval_n_2.evaluate(samples, targets)
+            print "** bleu score (n=4) = %.4f " % bleu_n_2[0] 
+            timings["valid_bleu_n_2"].append(bleu_n_2[0])
+
+            bleu_n_3 = bleu_eval_n_3.evaluate(samples, targets)
+            print "** bleu score (n=3) = %.4f " % bleu_n_3[0] 
+            timings["valid_bleu_n_3"].append(bleu_n_3[0])
+
+            bleu_n_4 = bleu_eval_n_4.evaluate(samples, targets)
+            print "** bleu score (n=4) = %.4f " % bleu_n_4[0] 
+            timings["valid_bleu_n_4"].append(bleu_n_4[0])
 
             # Jaccard evaluation
             jaccard = jaccard_eval.evaluate(samples, targets)
-
             print "** jaccard score = %.4f " % jaccard
             timings["valid_jaccard"].append(jaccard)
 
             # Recall evaluation
             recall_at_1 = recall_at_1_eval.evaluate(samples, targets)
-
             print "** recall@1 score = %.4f " % recall_at_1
             timings["valid_recall_at_1"].append(recall_at_1)
 
             recall_at_5 = recall_at_5_eval.evaluate(samples, targets)
-
             print "** recall@5 score = %.4f " % recall_at_5
             timings["valid_recall_at_5"].append(recall_at_5)
 
-            mrr_at_5 = mrr_at_5_eval.evaluate(samples, targets)
-
             # MRR evaluation (equivalent to mean average precision)
+            mrr_at_5 = mrr_at_5_eval.evaluate(samples, targets)
             print "** mrr@5 score = %.4f " % mrr_at_5
             timings["valid_mrr_at_5"].append(mrr_at_5)
 
             # TF-IDF cosine similarity evaluation
             tfidf_cs_at_1 = tfidf_cs_at_1_eval.evaluate(samples, targets)
-
             print "** tfidf-cs@1 score = %.4f " % tfidf_cs_at_1
             timings["tfidf_cs_at_1"].append(tfidf_cs_at_1)
 
             tfidf_cs_at_5 = tfidf_cs_at_5_eval.evaluate(samples, targets)
-
             print "** tfidf-cs@5 score = %.4f " % tfidf_cs_at_5
             timings["tfidf_cs_at_5"].append(tfidf_cs_at_5)
 
