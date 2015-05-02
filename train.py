@@ -202,14 +202,15 @@ def main(args):
         logger.debug("[TRAIN] - Got batch %d,%d" % (batch['x'].shape[1], batch['max_length']))
         
         x_data = batch['x']
+        x_data_reversed = batch['x_reversed']
         max_length = batch['max_length']
         x_cost_mask = batch['x_mask']
-        
+
         if state['use_nce']:
             y_neg = rng.choice(size=(10, max_length, x_data.shape[1]), a=model.idim, p=model.noise_probs).astype('int32')
-            c = train_batch(x_data, y_neg, max_length, x_cost_mask)
+            c = train_batch(x_data, x_data_reversed, y_neg, max_length, x_cost_mask)
         else:
-            c = train_batch(x_data, max_length, x_cost_mask)
+            c = train_batch(x_data, x_data_reversed, max_length, x_cost_mask)
 
         if numpy.isinf(c) or numpy.isnan(c):
             logger.warn("Got NaN cost .. skipping")
@@ -218,7 +219,7 @@ def main(args):
         train_cost += c
 
         # Compute word-error rate
-        miscl = eval_misclass_batch(x_data, max_length, x_cost_mask)
+        miscl = eval_misclass_batch(x_data, x_data_reversed, max_length, x_cost_mask)
         if numpy.isinf(c) or numpy.isnan(c):
             logger.warn("Got NaN misclassification .. skipping")
             continue
@@ -280,11 +281,13 @@ def main(args):
                     logger.debug("[VALID] - Got batch %d,%d" % (batch['x'].shape[1], batch['max_length']))
         
                     x_data = batch['x']
+                    x_data_reversed = batch['x_reversed']
                     max_length = batch['max_length']
                     x_cost_mask = batch['x_mask']
                     
 
-                    c, c_list = eval_batch(x_data, max_length, x_cost_mask)
+                    c, c_list = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask)
+
                     c_list = c_list.reshape((batch['x'].shape[1],max_length), order=(1,0))
                     c_list = numpy.sum(c_list, axis=1)
                     
@@ -316,7 +319,7 @@ def main(args):
                     valid_highest_triples = con_triples[con_indices]
 
                     # Compute word-error rate
-                    miscl = eval_misclass_batch(x_data, max_length, x_cost_mask)
+                    miscl = eval_misclass_batch(x_data, x_data_reversed, max_length, x_cost_mask)
                     if numpy.isinf(c) or numpy.isnan(c):
                         continue
 
@@ -327,10 +330,11 @@ def main(args):
                         # Compute marginal log-likelihood of last utterance in triple:
                         # We approximate it with the margina log-probabiltiy of the utterance being observed first in the triple
                         x_data_last_utterance = batch['x_last_utterance']
+                        x_data_last_utterance_reversed = batch['x_last_utterance_reversed']
                         x_cost_mask_last_utterance = batch['x_mask_last_utterance']
                         x_start_of_last_utterance = batch['x_start_of_last_utterance']
 
-                        marginal_last_utterance_loglikelihood, marginal_last_utterance_loglikelihood_list = eval_batch(x_data_last_utterance, max_length, x_cost_mask_last_utterance)
+                        marginal_last_utterance_loglikelihood, marginal_last_utterance_loglikelihood_list = eval_batch(x_data_last_utterance, x_data_last_utterance_reversed, max_length, x_cost_mask_last_utterance)
 
                         marginal_last_utterance_loglikelihood_list = marginal_last_utterance_loglikelihood_list.reshape((batch['x'].shape[1],max_length), order=(1,0))
                         marginal_last_utterance_loglikelihood_list = numpy.sum(marginal_last_utterance_loglikelihood_list, axis=1)
@@ -343,7 +347,7 @@ def main(args):
                         for i in range(batch['x'].shape[1]):
                             x_cost_mask_first_utterances[x_start_of_last_utterance[i]:max_length, i] = 0
 
-                        marginal_first_utterances_loglikelihood, marginal_first_utterances_loglikelihood_list = eval_batch(x_data, max_length, x_cost_mask_first_utterances)
+                        marginal_first_utterances_loglikelihood, marginal_first_utterances_loglikelihood_list = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask_first_utterances)
 
                         marginal_first_utterances_loglikelihood_list = marginal_first_utterances_loglikelihood_list.reshape((batch['x'].shape[1],max_length), order=(1,0))
                         marginal_first_utterances_loglikelihood_list = numpy.sum(marginal_first_utterances_loglikelihood_list, axis=1)

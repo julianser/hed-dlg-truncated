@@ -23,11 +23,14 @@ def create_padded_batch(state, x):
     X = numpy.zeros((mx, n), dtype='int32')
     Xmask = numpy.zeros((mx, n), dtype='float32') 
 
-    # Variables to store last utterance (used to compute mutual information metric)
-    X_last_utterance = numpy.zeros((mx, n), dtype='int32')
-    Xmask_last_utterance = numpy.zeros((mx, n), dtype='float32') 
-    X_start_of_last_utterance = numpy.zeros((n), dtype='int32') 
+    # Variable to store each utterance in reverse form (for bidirectional RNNs)
+    X_reversed = numpy.zeros((mx, n), dtype='int32')
 
+    # Variables to store last utterance (for computing mutual information metric)
+    X_last_utterance = numpy.zeros((mx, n), dtype='int32')
+    X_last_utterance_reversed = numpy.zeros((mx, n), dtype='int32')
+    Xmask_last_utterance = numpy.zeros((mx, n), dtype='float32')
+    X_start_of_last_utterance = numpy.zeros((n), dtype='int32') 
 
     # Fill X and Xmask
     # Keep track of number of predictions and maximum triple length
@@ -53,24 +56,35 @@ def create_padded_batch(state, x):
             X[triple_length:, idx] = state['eos_sym']
 
         # Initialize Xmask column with ones in all positions that
-        # were just set in X
+        # were just set in X. 
+        # Note: if we need mask to depend on tokens inside X, then we need to 
+        # create a corresponding mask for X_reversed and send it further in the model
         Xmask[:triple_length, idx] = 1.
 
-        # Find start of last utterance
+        # Reverse all utterances
         eos_indices = numpy.where(X[:, idx] == state['eos_sym'])[0]
+        X_reversed[:triple_length, idx] = x[0][idx][:triple_length]
+        prev_eos_index = -1
+        for eos_index in eos_indices:
+            X_reversed[(prev_eos_index+2):eos_index, idx] = (X_reversed[(prev_eos_index+2):eos_index, idx])[::-1]
+            prev_eos_index = eos_index
+            if prev_eos_index > triple_length:
+                break
+
+        # Find start of last utterance and store the utterance
         assert (len(eos_indices) > 2)
         start_of_last_utterance = eos_indices[1]+1
         X_start_of_last_utterance[idx] = start_of_last_utterance
         X_last_utterance[0:(triple_length-start_of_last_utterance), idx] = X[start_of_last_utterance:triple_length, idx]
         Xmask_last_utterance[0:(triple_length-start_of_last_utterance), idx] = Xmask[start_of_last_utterance:triple_length, idx]
-     
 
-
-
+        # Store also the last utterance in reverse
+        X_last_utterance_reversed[0:(triple_length-start_of_last_utterance), idx] = numpy.copy(X_last_utterance[0:(triple_length-start_of_last_utterance), idx])
+        X_last_utterance_reversed[1:(triple_length-start_of_last_utterance-1), idx] = (X_last_utterance_reversed[1:(triple_length-start_of_last_utterance-1), idx])[::-1]
 
      
     assert num_preds == numpy.sum(Xmask)
-    return {'x': X, 'x_mask': Xmask, 'x_last_utterance': X_last_utterance, 'x_mask_last_utterance': Xmask_last_utterance, 'x_start_of_last_utterance': X_start_of_last_utterance, 'num_preds': num_preds, 'max_length': max_length}
+    return {'x': X, 'x_reversed': X_reversed, 'x_mask': Xmask, 'x_last_utterance': X_last_utterance, 'x_last_utterance_reversed': X_last_utterance_reversed, 'x_mask_last_utterance': Xmask_last_utterance, 'x_start_of_last_utterance': X_start_of_last_utterance, 'num_preds': num_preds, 'max_length': max_length}
 
 def get_batch_iterator(rng, state):
     class Iterator(SSIterator):

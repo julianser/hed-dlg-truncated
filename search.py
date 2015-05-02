@@ -13,6 +13,8 @@ import codecs
 
 from dialog_encdec import DialogEncoderDecoder
 from numpy_compat import argpartition
+
+#TODO IS THERE A REASON WHY WE IMPORT THE PROTOTYPE STATE INSTEAD OF THE ACTUAL STATE CLASS?
 from state import prototype_state
 
 logger = logging.getLogger(__name__)
@@ -43,10 +45,19 @@ class BeamSearch(object):
         context = numpy.array(context, dtype='int32')[:, None]
         prev_hd = numpy.zeros((beam_size, self.qdim), dtype='float32')
         prev_hs = numpy.zeros((beam_size, self.sdim), dtype='float32')
-         
+
+        # Reverse all context utterances
+        context_reversed = numpy.copy(context)
+        for idx in range(context.shape[1]):
+            eos_indices = numpy.where(context[:, idx] == self.eos_sym)[0]
+            prev_eos_index = -1
+            for eos_index in eos_indices:
+                context_reversed[(prev_eos_index+2):eos_index, idx] = (context_reversed[(prev_eos_index+2):eos_index, idx])[::-1]
+                prev_eos_index = eos_index
+
         # Compute the context encoding and get
         # the last hierarchical state
-        h, hs = self.compute_encoding(context)
+        h, hs = self.compute_encoding(context, context_reversed)
         prev_hs[:] = hs[-1]
          
         fin_beam_gen = []
