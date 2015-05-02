@@ -222,7 +222,7 @@ class UtteranceEncoder(EncoderDecoderBase):
         # Get the hidden state sequence
         if return_L2_pooling==True:
             h = _res[0]
-            h_pooled = _res[1]
+            h_pooled = T.sqrt(_res[1])
             return [h, h_pooled]
         else:
             h = _res[0]
