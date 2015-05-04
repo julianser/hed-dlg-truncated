@@ -34,7 +34,7 @@ def prototype_state():
     state['sent_step_type'] = 'gated'
     state['triple_step_type'] = 'gated' 
 
-    state['bidirectional_utterance_encoder'] = True 
+    state['bidirectional_utterance_encoder'] = False
     
     # ----- SIZES ----
     # Dimensionality of hidden layers
@@ -125,7 +125,7 @@ def prototype_test():
 
     state['sent_step_type'] = 'gated'
     state['triple_step_type'] = 'gated' 
-    state['bidirectional_utterance_encoder'] = True 
+    state['bidirectional_utterance_encoder'] = False 
 
      
     # If out of memory, modify this!

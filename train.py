@@ -181,7 +181,7 @@ def main(args):
     while (step < state['loop_iters'] and
             (time.time() - start_time)/60. < state['time_stop'] and
             patience >= 0):
-        
+
         # Sample stuff
         if step % 200 == 0:
             for param in model.params:
@@ -240,7 +240,6 @@ def main(args):
                                                                  float(train_cost/train_done), \
                                                                  math.exp(float(train_cost/train_done)), \
                                                                  float(train_misclass)/float(train_done))
-
 
 
 
@@ -451,11 +450,11 @@ def main(args):
              
             # Bleu evaluation
             bleu_n_1 = bleu_eval_n_1.evaluate(samples, targets)
-            print "** bleu score (n=4) = %.4f " % bleu_n_1[0] 
+            print "** bleu score (n=1) = %.4f " % bleu_n_1[0] 
             timings["valid_bleu_n_1"].append(bleu_n_1[0])
 
             bleu_n_2 = bleu_eval_n_2.evaluate(samples, targets)
-            print "** bleu score (n=4) = %.4f " % bleu_n_2[0] 
+            print "** bleu score (n=2) = %.4f " % bleu_n_2[0] 
             timings["valid_bleu_n_2"].append(bleu_n_2[0])
 
             bleu_n_3 = bleu_eval_n_3.evaluate(samples, targets)

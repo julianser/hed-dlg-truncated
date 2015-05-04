@@ -46,26 +46,12 @@ class EncoderDecoderBase():
         self.params = []
 
 class UtteranceEncoder(EncoderDecoderBase):
-    def init_params(self):
+    def init_params(self, word_embedding_param):
+        # Initialzie W_emb to given word embeddings
+        assert(word_embedding_param != None)
+        self.W_emb = word_embedding_param
+
         """ sent weights """
-
-        if self.initialize_from_pretrained_word_embeddings == True:
-            # Load pretrained word embeddings from pickled file
-            logger.debug("Loading pretrained word embeddings")
-            pretrained_embeddings = cPickle.load(open(self.pretrained_word_embeddings_file, 'r'))
-
-            # Check all dimensions match from the pretrained embeddings
-            assert(self.idim == pretrained_embeddings[0].shape[0])
-            assert(self.rankdim == pretrained_embeddings[0].shape[1])
-            assert(self.idim == pretrained_embeddings[1].shape[0])
-            assert(self.rankdim == pretrained_embeddings[1].shape[1])
-
-            self.W_emb_pretrained_mask = theano.shared(pretrained_embeddings[1].astype(numpy.float32), name='W_emb_mask')
-            self.W_emb = add_to_params(self.params, theano.shared(value=pretrained_embeddings[0].astype(numpy.float32), name='W_emb'))
-        else:
-            self.W_emb = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.idim, self.rankdim), name='W_emb'))
-            
-
         self.W_in = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='W_in'))
         self.W_hh = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='W_hh'))
         self.b_hh = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='b_hh'))
@@ -78,43 +64,43 @@ class UtteranceEncoder(EncoderDecoderBase):
             self.b_z = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='b_z'))
             self.b_r = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='b_r'))
 
-    def plain_sent_step(self, x_t, m_t, h_tm1):
+    def plain_sent_step(self, x_t, m_t, *args):
+        do_pool = False
+        if len(args) > 1:
+            do_pool = True
+
+        args = iter(args)
+        h_tm1 = next(args)
+
         if m_t.ndim >= 1:
             m_t = m_t.dimshuffle(0, 'x')
          
         hr_tm1 = m_t * h_tm1
         h_t = self.sent_rec_activation(T.dot(x_t, self.W_in) + T.dot(hr_tm1, self.W_hh) + self.b_hh)
-        return h_t
 
-    def plain_sent_step_pooled(self, x_t, m_t, h_tm1, h_tm1_pooled, pool_len):
-        if m_t.ndim >= 1:
-            m_t = m_t.dimshuffle(0, 'x')
-         
-        hr_tm1 = m_t * h_tm1
-        h_t = self.sent_rec_activation(T.dot(x_t, self.W_in) + T.dot(hr_tm1, self.W_hh) + self.b_hh)
+        if do_pool:
+            print 'AAA'
+            # perform pooling with a moving average
+            h_tm1_pooled = next(args)
+            pool_len = next(args)
 
-        # perform pooling with a moving average
-        new_pool_len = pool_len * m_t + 1
-        h_t_pooled = ((new_pool_len - 1) * h_tm1_pooled + h_t**2) / new_pool_len
+            new_pool_len = pool_len * m_t + 1
+            h_t_pooled = ((new_pool_len - 1) * h_tm1_pooled + h_t**2) / new_pool_len
 
-        # return state and pooled state
-        return h_t, h_t_pooled, new_pool_len
+            # return state and pooled state
+            return [h_t, h_t_pooled, new_pool_len]
+        else:
+            # Return hidden state only
+            return [h_t]
 
-    def gated_sent_step(self, x_t, m_t, h_tm1):
-        if m_t.ndim >= 1:
-            m_t = m_t.dimshuffle(0, 'x') 
-         
-        hr_tm1 = m_t * h_tm1
-         
-        r_t = T.nnet.sigmoid(T.dot(x_t, self.W_in_r) + T.dot(hr_tm1, self.W_hh_r) + self.b_r)
-        z_t = T.nnet.sigmoid(T.dot(x_t, self.W_in_z) + T.dot(hr_tm1, self.W_hh_z) + self.b_z)
-        h_tilde = self.sent_rec_activation(T.dot(x_t, self.W_in) + T.dot(r_t * hr_tm1, self.W_hh) + self.b_hh)
-        h_t = (np.float32(1.0) - z_t) * hr_tm1 + z_t * h_tilde
-         
-        # return both reset state and non-reset state
-        return h_t, r_t, z_t, h_tilde    
+    def gated_sent_step(self, x_t, m_t, *args):
+        do_pool = False
+        if len(args) > 5:
+            do_pool = True
 
-    def gated_sent_step_pooled(self, x_t, m_t, h_tm1, h_tm1_pooled, pool_len):
+        args = iter(args)
+        h_tm1 = next(args)
+
         if m_t.ndim >= 1:
             m_t = m_t.dimshuffle(0, 'x') 
          
@@ -124,13 +110,20 @@ class UtteranceEncoder(EncoderDecoderBase):
         z_t = T.nnet.sigmoid(T.dot(x_t, self.W_in_z) + T.dot(hr_tm1, self.W_hh_z) + self.b_z)
         h_tilde = self.sent_rec_activation(T.dot(x_t, self.W_in) + T.dot(r_t * hr_tm1, self.W_hh) + self.b_hh)
         h_t = (np.float32(1.0) - z_t) * hr_tm1 + z_t * h_tilde
-         
-        # perform pooling with a moving average
-        new_pool_len = pool_len * m_t + 1
-        h_t_pooled = ((new_pool_len - 1) * h_tm1_pooled + h_t**2) / new_pool_len
+        
+        if do_pool:
+            # perform pooling with a moving average
+            h_tm1_pooled = next(args)
+            pool_len = next(args)
 
-        # return both reset state and non-reset state
-        return h_t, h_t_pooled, new_pool_len, r_t, z_t, h_tilde
+            new_pool_len = pool_len * m_t + 1
+            h_t_pooled = ((new_pool_len - 1) * h_tm1_pooled + h_t**2) / new_pool_len
+
+            # return both reset state and non-reset state
+            return [h_t, h_t_pooled, new_pool_len, r_t, z_t, h_tilde]
+        else:
+            # return both reset state and non-reset state
+            return [h_t, r_t, z_t, h_tilde]
 
     def approx_embedder(self, x):
         return self.W_emb[x]
@@ -149,7 +142,7 @@ class UtteranceEncoder(EncoderDecoderBase):
         # in this case batch_size is 
         else:
             batch_size = 1
-        
+
         # if it is not one_step then we initialize everything to 0  
         if not one_step:
             h_0 = T.alloc(np.float32(0), batch_size, self.qdim)
@@ -158,7 +151,7 @@ class UtteranceEncoder(EncoderDecoderBase):
                 h_0_pooled = T.alloc(np.float32(0), batch_size, self.qdim)
                 # If we made pool_len a vector, we could theoretically speed up pooling computations,
                 # but I suspect that theano (e.g. T.tensordot) automatically converts it into a matrix before
-                # multiplyng anyway so it wouldn't make a big difference...
+                # multiplying anyway so it wouldn't make a big difference...
                 pool_len_0 = T.alloc(np.float32(0), batch_size, self.qdim)
 
         # in sampling mode (i.e. one step) we require 
@@ -193,31 +186,30 @@ class UtteranceEncoder(EncoderDecoderBase):
 
         # Gated Encoder
         if self.sent_step_type == "gated":
+            f_enc = self.gated_sent_step
             if return_L2_pooling:
-                f_enc = self.gated_sent_step_pooled
                 o_enc_info = [h_0, h_0_pooled, pool_len_0, None, None, None]
             else:
-                f_enc = self.gated_sent_step
                 o_enc_info = [h_0, None, None, None]
+
         else:
+            f_enc = self.plain_sent_step
             if return_L2_pooling:
-                f_enc = self.plain_sent_step_pooled
                 o_enc_info = [h_0, h_0_pooled, pool_len_0]
             else:
-                f_enc = self.plain_sent_step
                 o_enc_info = [h_0]
-        
+
+
         # Run through all the sentence (encode everything)
         if not one_step: 
             _res, _ = theano.scan(f_enc,
                               sequences=[xe, rolled_xmask],\
                               outputs_info=o_enc_info)
-        # Make just one step further
-        else:
+        else: # Make just one step further
             if return_L2_pooling:
-                _res = f_enc(xe, rolled_xmask, h_0, h_0_pooled, pool_len_0)
+                _res = f_enc(xe, rolled_xmask, [h_0, h_0_pooled, pool_len_0])[0]
             else:
-                _res = f_enc(xe, rolled_xmask, h_0)
+                _res = f_enc(xe, rolled_xmask, [h_0])[0]
 
         # Get the hidden state sequence
         if return_L2_pooling==True:
@@ -228,9 +220,9 @@ class UtteranceEncoder(EncoderDecoderBase):
             h = _res[0]
             return h
 
-    def __init__(self, state, rng, parent):
+    def __init__(self, state, rng, word_embedding_param, parent):
         EncoderDecoderBase.__init__(self, state, rng, parent)
-        self.init_params()
+        self.init_params(word_embedding_param)
 
 class DialogEncoder(EncoderDecoderBase):
     def init_params(self):
@@ -273,9 +265,6 @@ class DialogEncoder(EncoderDecoderBase):
          
         hs_t = (m_t) * hs_tm1 + (1 - m_t) * hs_update
         return hs_t, hs_tilde, rs_t, zs_t
-
-    def approx_embedder(self, x):
-        return self.W_emb[x]
 
     def build_encoder(self, h, x, xmask=None, **kwargs):
         one_step = False
@@ -353,11 +342,12 @@ class UtteranceDecoder(EncoderDecoderBase):
     SAMPLING = 2
     BEAM_SEARCH = 3
 
-    def __init__(self, state, rng, parent, utterance_encoder, dialog_encoder):
+    def __init__(self, state, rng, parent, dialog_encoder, word_embedding_param):
         EncoderDecoderBase.__init__(self, state, rng, parent)
         # Take as input the encoder instance for the embeddings..
         # To modify in the future
-        self.utterance_encoder = utterance_encoder
+        assert(word_embedding_param != None)
+        self.word_embedding_param = word_embedding_param
         self.dialog_encoder = dialog_encoder
         self.trng = MRG_RandomStreams(self.seed)
         self.init_params()
@@ -443,7 +433,7 @@ class UtteranceDecoder(EncoderDecoderBase):
 
     def approx_embedder(self, x):
         # Here we use the same embeddings learnt in the encoder.. !!!
-        return self.utterance_encoder.approx_embedder(x)
+        return self.word_embedding_param[x]
      
     def output_softmax(self, pre_activ):
         # returns a (timestep, bs, idim) matrix (huge)
@@ -605,14 +595,13 @@ class UtteranceDecoder(EncoderDecoderBase):
         if self.bidirectional_utterance_encoder:
             utterance_forward_encoder_args = dict(prev_h=prev_h_forward, prev_h_pooled=prev_h_forward_pooled)
 
-            res_forward = self.parent.utterance_encoder.build_encoder(prev_word, return_L2_pooling = True, **utterance_forward_encoder_args)
+            res_forward = self.parent.utterance_encoder_forward.build_encoder(prev_word, return_L2_pooling = True, **utterance_forward_encoder_args)
             h_forward = res_forward[0]
             h_forward_pooled = res_forward[1]
 
-            #TODO CHECK IF THIS IS OK:
             logger.warn("SAMPLER (PROBABLY) DOES NOT WORK WITH BIDIRECTIONAL RNN")
             utterance_backward_encoder_args = dict(prev_h=prev_h_backward, prev_h_pooled=prev_h_backward_pooled)
-            res_backward = self.parent.utterance_encoder.build_encoder(prev_word, return_L2_pooling = True, **utterance_backward_encoder_args)
+            res_backward = self.parent.utterance_encoder_backward.build_encoder(prev_word, return_L2_pooling = True, **utterance_backward_encoder_args)
             h_backward = res_backward[0]
             h_backward_pooled = res_backward[1]
 
@@ -798,7 +787,8 @@ class DialogEncoderDecoder(Model):
         if self.initialize_from_pretrained_word_embeddings and self.fix_pretrained_word_embeddings:
             # Keep pretrained word embeddings fixed
             logger.debug("Will use mask to fix pretrained word embeddings")
-            grads[self.utterance_encoder.W_emb] = grads[self.utterance_encoder.W_emb] * self.utterance_encoder.W_emb_pretrained_mask
+            grads[self.W_emb] = grads[self.W_emb] * self.W_emb_pretrained_mask
+
         else:
             logger.debug("Will train all word embeddings")
             
@@ -888,10 +878,11 @@ class DialogEncoderDecoder(Model):
     def build_encoder_function(self):
         if not hasattr(self, 'encoder_fn'):
             if self.bidirectional_utterance_encoder:
-                res_forward = self.utterance_encoder.build_encoder(self.aug_x_data, return_L2_pooling = True)
+                res_forward = self.utterance_encoder_forward.build_encoder(self.aug_x_data, return_L2_pooling = True)
                 h_forward = res_forward[0]
                 h_forward_pooled = res_forward[1]
-                res_backward = self.utterance_encoder.build_encoder(self.aug_x_data_reversed, return_L2_pooling = True)
+
+                res_backward = self.utterance_encoder_backward.build_encoder(self.aug_x_data_reversed, return_L2_pooling = True)
                 h_backward = res_backward[0]
                 h_backward_pooled = res_backward[1]
 
@@ -947,16 +938,7 @@ class DialogEncoderDecoder(Model):
         self.state['idim'] = self.idim
         logger.debug("idim: " + str(self.idim))
 
-        logger.debug("Initializing encoder")
-        self.utterance_encoder = UtteranceEncoder(self.state, self.rng, self)
-        self.dialog_encoder = DialogEncoder(self.state, self.rng, self)
-        logger.debug("Initializing decoder")
-        self.utterance_decoder = UtteranceDecoder(self.state, self.rng, self, self.utterance_encoder, self.dialog_encoder)
-        
-        # Init params
-        self.params = self.utterance_encoder.params + self.dialog_encoder.params + self.utterance_decoder.params
-        assert len(set(self.params)) == (len(self.utterance_encoder.params) + len(self.dialog_encoder.params) + len(self.utterance_decoder.params))
-
+        logger.debug("Initializing Theano variables")
         self.y_neg = T.itensor3('y_neg')
         self.x_data = T.imatrix('x_data')
         self.x_data_reversed = T.imatrix('x_data_reversed')
@@ -979,13 +961,40 @@ class DialogEncoderDecoder(Model):
         if 'decoder_bias_type' in self.state:
             logger.debug("Decoder bias type {}".format(self.decoder_bias_type))
 
-        logger.debug("Build encoder")
+
+        # Build word embeddings, which are shared throughout the model
+        if self.initialize_from_pretrained_word_embeddings == True:
+            # Load pretrained word embeddings from pickled file
+            logger.debug("Loading pretrained word embeddings")
+            pretrained_embeddings = cPickle.load(open(self.pretrained_word_embeddings_file, 'r'))
+
+            # Check all dimensions match from the pretrained embeddings
+            assert(self.idim == pretrained_embeddings[0].shape[0])
+            assert(self.rankdim == pretrained_embeddings[0].shape[1])
+            assert(self.idim == pretrained_embeddings[1].shape[0])
+            assert(self.rankdim == pretrained_embeddings[1].shape[1])
+
+            self.W_emb_pretrained_mask = theano.shared(pretrained_embeddings[1].astype(numpy.float32), name='W_emb_mask')
+            self.W_emb = add_to_params(self.params, theano.shared(value=pretrained_embeddings[0].astype(numpy.float32), name='W_emb'))
+        else:
+            # Initialize word embeddings randomly
+            self.W_emb = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.idim, self.rankdim), name='W_emb'))
+
+        # Build utterance encoders
         if self.bidirectional_utterance_encoder:
-            res_forward = self.utterance_encoder.build_encoder(training_x, xmask=training_hs_mask, return_L2_pooling = True)
+            logger.debug("Initializing forward utterance encoder")
+            self.utterance_encoder_forward = UtteranceEncoder(self.state, self.rng, self.W_emb, self)
+
+            logger.debug("Build forward utterance encoder")
+            res_forward = self.utterance_encoder_forward.build_encoder(training_x, xmask=training_hs_mask, return_L2_pooling = True)
             self.h_forward = res_forward[0]
             self.h_forward_pooled = res_forward[1]
 
-            res_backward = self.utterance_encoder.build_encoder(training_x_reversed, xmask=training_hs_mask, return_L2_pooling = True)
+            logger.debug("Initializing backward utterance encoder")
+            self.utterance_encoder_backward = UtteranceEncoder(self.state, self.rng, self.W_emb, self)
+
+            logger.debug("Build backward utterance encoder")
+            res_backward = self.utterance_encoder_backward.build_encoder(training_x_reversed, xmask=training_hs_mask, return_L2_pooling = True)
             self.h_backward = res_backward[0]
             self.h_backward_pooled = res_backward[1]
 
@@ -993,12 +1002,31 @@ class DialogEncoderDecoder(Model):
             self.h = T.concatenate([self.h_forward_pooled, self.h_backward_pooled], axis=2)
 
         else:
+            logger.debug("Initializing utterance encoder")
+            self.utterance_encoder = UtteranceEncoder(self.state, self.rng, self.W_emb, self)
+
+            logger.debug("Build utterance encoder")
             # The encoder h embedding is the final hidden state of the forward encoder RNN
             self.h = self.utterance_encoder.build_encoder(training_x, xmask=training_hs_mask)
 
+        logger.debug("Initializing dialog encoder")
+        self.dialog_encoder = DialogEncoder(self.state, self.rng, self)
+
+        logger.debug("Build dialog encoder")
         self.hs = self.dialog_encoder.build_encoder(self.h, training_x, xmask=training_hs_mask)
 
-        #target_probs, target_probs_full_matrix = self.utterance_decoder.build_decoder(hs, training_x, xmask=training_hs_mask, y=training_y, mode=UtteranceDecoder.EVALUATION)
+        logger.debug("Initializing decoder")
+
+        # We initialize the decoder, and fix its word embeddings to that of the encoder(s)
+        self.utterance_decoder = UtteranceDecoder(self.state, self.rng, self, self.dialog_encoder, self.W_emb)
+
+        # Init params
+        if self.bidirectional_utterance_encoder:
+            self.params = [self.W_emb] + self.utterance_encoder_forward.params + self.utterance_encoder_backward.params + self.dialog_encoder.params + self.utterance_decoder.params
+            assert len(set(self.params)) == (len([self.W_emb]) + len(self.utterance_encoder_forward.params) + len(self.utterance_encoder_backward.params) + len(self.dialog_encoder.params) + len(self.utterance_decoder.params))
+        else:
+            self.params = [self.W_emb] + self.utterance_encoder.params + self.dialog_encoder.params + self.utterance_decoder.params
+            assert len(set(self.params)) == (len([self.W_emb]) + len(self.utterance_encoder.params) + len(self.dialog_encoder.params) + len(self.utterance_decoder.params))
 
         logger.debug("Build decoder (NCE)")
         contrastive_cost, self.hd_nce = self.utterance_decoder.build_decoder(self.hs, training_x, y_neg=self.y_neg, y=training_y, xmask=training_hs_mask, mode=UtteranceDecoder.NCE)
