@@ -79,7 +79,6 @@ class UtteranceEncoder(EncoderDecoderBase):
         h_t = self.sent_rec_activation(T.dot(x_t, self.W_in) + T.dot(hr_tm1, self.W_hh) + self.b_hh)
 
         if do_pool:
-            print 'AAA'
             # perform pooling with a moving average
             h_tm1_pooled = next(args)
             pool_len = next(args)
@@ -95,7 +94,7 @@ class UtteranceEncoder(EncoderDecoderBase):
 
     def gated_sent_step(self, x_t, m_t, *args):
         do_pool = False
-        if len(args) > 5:
+        if len(args) >= 3:
             do_pool = True
 
         args = iter(args)
