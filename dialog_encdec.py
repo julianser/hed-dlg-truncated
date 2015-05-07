@@ -211,7 +211,7 @@ class UtteranceEncoder(EncoderDecoderBase):
                 _res = f_enc(xe, rolled_xmask, [h_0])[0]
 
         # Get the hidden state sequence
-        if return_L2_pooling==True:
+        if return_L2_pooling:
             h = _res[0]
             h_pooled = T.sqrt(_res[1])
             return [h, h_pooled]
@@ -568,20 +568,35 @@ class UtteranceDecoder(EncoderDecoderBase):
         assert log_prob.ndim == 1
 
         if self.bidirectional_utterance_encoder:
-            prev_h_forward = next(args) 
-            assert prev_h_forward.ndim == 2
+            if self.encode_with_l2_pooling:
+                prev_h_forward = next(args) 
+                assert prev_h_forward.ndim == 2
 
-            prev_h_forward_pooled = next(args)
-            assert prev_h_forward_pooled.ndim == 2
+                prev_h_forward_pooled = next(args)
+                assert prev_h_forward_pooled.ndim == 2
 
-            prev_h_backward = next(args)
-            assert prev_h_backward.ndim == 2
+                prev_h_backward = next(args)
+                assert prev_h_backward.ndim == 2
 
-            prev_h_backward_pooled = next(args)
-            assert prev_h_backward_pooled.ndim == 2
+                prev_h_backward_pooled = next(args)
+                assert prev_h_backward_pooled.ndim == 2
+            else:
+                prev_h_forward = next(args) 
+                assert prev_h_forward.ndim == 2
+
+                prev_h_backward = next(args)
+                assert prev_h_backward.ndim == 2
+
         else:
-            prev_h = next(args) 
-            assert prev_h.ndim == 2
+            if self.encode_with_l2_pooling:
+                prev_h = next(args) 
+                assert prev_h.ndim == 2
+
+                prev_h_pooled = next(args) 
+                assert prev_h_pooled.ndim == 2
+            else:
+                prev_h = next(args) 
+                assert prev_h.ndim == 2
 
         
         prev_hs = next(args)
@@ -592,22 +607,40 @@ class UtteranceDecoder(EncoderDecoderBase):
        
         # When we sample we shall recompute the encoder for one step...
         if self.bidirectional_utterance_encoder:
-            utterance_forward_encoder_args = dict(prev_h=prev_h_forward, prev_h_pooled=prev_h_forward_pooled)
+            logger.warn("SAMPLER DOES CURRENTLY NOT WORK WITH BIDIRECTIONAL RNN")
 
-            res_forward = self.parent.utterance_encoder_forward.build_encoder(prev_word, return_L2_pooling = True, **utterance_forward_encoder_args)
-            h_forward = res_forward[0]
-            h_forward_pooled = res_forward[1]
+            if self.encode_with_l2_pooling:
+                utterance_forward_encoder_args = dict(prev_h=prev_h_forward, prev_h_pooled=prev_h_forward_pooled)
+                utterance_backward_encoder_args = dict(prev_h=prev_h_backward, prev_h_pooled=prev_h_backward_pooled)
 
-            logger.warn("SAMPLER (PROBABLY) DOES NOT WORK WITH BIDIRECTIONAL RNN")
-            utterance_backward_encoder_args = dict(prev_h=prev_h_backward, prev_h_pooled=prev_h_backward_pooled)
-            res_backward = self.parent.utterance_encoder_backward.build_encoder(prev_word, return_L2_pooling = True, **utterance_backward_encoder_args)
-            h_backward = res_backward[0]
-            h_backward_pooled = res_backward[1]
+                res_forward = self.parent.utterance_encoder_forward.build_encoder(prev_word, return_L2_pooling = self.encode_with_l2_pooling, **utterance_forward_encoder_args)
+                res_backward = self.parent.utterance_encoder_backward.build_encoder(prev_word, return_L2_pooling = self.encode_with_l2_pooling, **utterance_backward_encoder_args)
 
-            h = T.concatenate([h_forward_pooled, h_backward_pooled], axis=1)
+                # If we do pooling, then pick out the pooled elements, otherwise there is only one element per encoder
+                h_forward = res_forward[0]
+                h_forward_pooled = res_forward[1]
+                h_backward = res_backward[0]
+                h_backward_pooled = res_backward[1]
+                h = T.concatenate([h_forward_pooled, h_backward_pooled], axis=1)
+            else:
+                utterance_forward_encoder_args = dict(prev_h=prev_h_forward)
+                utterance_backward_encoder_args = dict(prev_h=prev_h_backward)
+
+                res_forward = self.parent.utterance_encoder_forward.build_encoder(prev_word, return_L2_pooling = self.encode_with_l2_pooling, **utterance_forward_encoder_args)
+                res_backward = self.parent.utterance_encoder_backward.build_encoder(prev_word, return_L2_pooling = self.encode_with_l2_pooling, **utterance_backward_encoder_args)
+
+                h_forward = res_forward
+                h_backward = res_backward
+                h = T.concatenate([h_forward, h_backward], axis=1)
         else:
-            utterance_encoder_args = dict(prev_h=prev_h)
-            h = self.parent.utterance_encoder.build_encoder(prev_word, **utterance_encoder_args)
+            if self.encode_with_l2_pooling:
+                utterance_encoder_args = dict(prev_h=prev_h, prev_h_pooled=prev_h_pooled)
+                # If we do pooling, then pick out the pooled element, otherwise there is only one element
+                res = self.parent.utterance_encoder.build_encoder(prev_word, return_L2_pooling = self.encode_with_l2_pooling, **utterance_encoder_args)
+                h = res[1]
+            else:
+                utterance_encoder_args = dict(prev_h=prev_h)
+                h = self.parent.utterance_encoder.build_encoder(prev_word, return_L2_pooling = self.encode_with_l2_pooling, **utterance_encoder_args)
 
         dialog_encoder_args = dict(prev_hs=prev_hs)
         hs = self.parent.dialog_encoder.build_encoder(h, prev_word, **dialog_encoder_args)
@@ -623,7 +656,10 @@ class UtteranceDecoder(EncoderDecoderBase):
         assert hd.ndim == 2
 
         if self.bidirectional_utterance_encoder:
-            return [sample, log_prob, h_forward, h_forward_pooled, h_backward, h_backward_pooled, hs, hd]
+            if self.encode_with_l2_pooling:
+                return [sample, log_prob, h_forward, h_forward_pooled, h_backward, h_backward_pooled, hs, hd]
+            else:
+                return [sample, log_prob, h_forward, h_backward, hs, hd]
         else:
             return [sample, log_prob, h, hs, hd]
     
@@ -635,21 +671,37 @@ class UtteranceDecoder(EncoderDecoderBase):
         # 4) prev_hs hidden layers
         # 5) prev_hd hidden layers
         if self.bidirectional_utterance_encoder:
-            states = [T.alloc(np.int64(self.eos_sym), n_samples),
-                  T.alloc(np.float32(0.), n_samples),
-                  T.alloc(np.float32(0.), n_samples, self.qdim),
-                  T.alloc(np.float32(0.), n_samples, self.qdim),
-                  T.alloc(np.float32(0.), n_samples, self.qdim),
-                  T.alloc(np.float32(0.), n_samples, self.qdim),
-                  T.alloc(np.float32(0.), n_samples, self.sdim),
-                  T.alloc(np.float32(0.), n_samples, self.qdim)]
+            if self.encode_with_l2_pooling:
+                states = [T.alloc(np.int64(self.eos_sym), n_samples),
+                      T.alloc(np.float32(0.), n_samples),
+                      T.alloc(np.float32(0.), n_samples, self.qdim),
+                      T.alloc(np.float32(0.), n_samples, self.qdim),
+                      T.alloc(np.float32(0.), n_samples, self.qdim),
+                      T.alloc(np.float32(0.), n_samples, self.qdim),
+                      T.alloc(np.float32(0.), n_samples, self.sdim),
+                      T.alloc(np.float32(0.), n_samples, self.qdim)]
+            else:
+                states = [T.alloc(np.int64(self.eos_sym), n_samples),
+                      T.alloc(np.float32(0.), n_samples),
+                      T.alloc(np.float32(0.), n_samples, self.qdim),
+                      T.alloc(np.float32(0.), n_samples, self.qdim),
+                      T.alloc(np.float32(0.), n_samples, self.sdim),
+                      T.alloc(np.float32(0.), n_samples, self.qdim)]
 
         else:
-            states = [T.alloc(np.int64(self.eos_sym), n_samples),
-                  T.alloc(np.float32(0.), n_samples),
-                  T.alloc(np.float32(0.), n_samples, self.qdim),
-                  T.alloc(np.float32(0.), n_samples, self.sdim),
-                  T.alloc(np.float32(0.), n_samples, self.qdim)]
+            if self.encode_with_l2_pooling:
+                states = [T.alloc(np.int64(self.eos_sym), n_samples),
+                      T.alloc(np.float32(0.), n_samples),
+                      T.alloc(np.float32(0.), n_samples, self.qdim),
+                      T.alloc(np.float32(0.), n_samples, self.qdim),
+                      T.alloc(np.float32(0.), n_samples, self.sdim),
+                      T.alloc(np.float32(0.), n_samples, self.qdim)]
+            else:
+                states = [T.alloc(np.int64(self.eos_sym), n_samples),
+                      T.alloc(np.float32(0.), n_samples),
+                      T.alloc(np.float32(0.), n_samples, self.qdim),
+                      T.alloc(np.float32(0.), n_samples, self.sdim),
+                      T.alloc(np.float32(0.), n_samples, self.qdim)]
 
         outputs, updates = theano.scan(self.sampling_step,
                     outputs_info=states,
@@ -877,23 +929,26 @@ class DialogEncoderDecoder(Model):
     def build_encoder_function(self):
         if not hasattr(self, 'encoder_fn'):
             if self.bidirectional_utterance_encoder:
-                res_forward = self.utterance_encoder_forward.build_encoder(self.aug_x_data, return_L2_pooling = True)
-                h_forward = res_forward[0]
-                h_forward_pooled = res_forward[1]
-
-                res_backward = self.utterance_encoder_backward.build_encoder(self.aug_x_data_reversed, return_L2_pooling = True)
-                h_backward = res_backward[0]
-                h_backward_pooled = res_backward[1]
+                res_forward = self.utterance_encoder_forward.build_encoder(self.aug_x_data, return_L2_pooling = self.encode_with_l2_pooling)
+                res_backward = self.utterance_encoder_backward.build_encoder(self.aug_x_data_reversed, return_L2_pooling = self.encode_with_l2_pooling)
 
                 # The encoder h embedding is a concatenation of L2 pooling on the forward and backward encoder RNNs
-                h = T.concatenate([h_forward_pooled, h_backward_pooled], axis=2)
+                if self.encode_with_l2_pooling:
+                    h = T.concatenate([res_forward[1], res_backward[1]], axis=2)
+                else: # Each encoder gives a single output vector
+                    h = T.concatenate([res_forward, res_backward], axis=2)
 
                 hs = self.dialog_encoder.build_encoder(h, self.aug_x_data)
 
                 self.utterance_encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed],
                     outputs=[h, hs], on_unused_input='warn', name="encoder_fn")
             else:
-                h = self.utterance_encoder.build_encoder(self.aug_x_data)
+                if self.encode_with_l2_pooling:
+                    # If we do pooling, then pick out the pooled element, otherwise there is only one element
+                    h = self.utterance_encoder.build_encoder(self.aug_x_data, return_L2_pooling = self.encode_with_l2_pooling)[1]
+                else:
+                    h = self.utterance_encoder.build_encoder(self.aug_x_data, return_L2_pooling = self.encode_with_l2_pooling)
+
                 hs = self.dialog_encoder.build_encoder(h, self.aug_x_data)
 
                 self.utterance_encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed],
@@ -983,30 +1038,27 @@ class DialogEncoderDecoder(Model):
         if self.bidirectional_utterance_encoder:
             logger.debug("Initializing forward utterance encoder")
             self.utterance_encoder_forward = UtteranceEncoder(self.state, self.rng, self.W_emb, self)
-
             logger.debug("Build forward utterance encoder")
-            res_forward = self.utterance_encoder_forward.build_encoder(training_x, xmask=training_hs_mask, return_L2_pooling = True)
-            self.h_forward = res_forward[0]
-            self.h_forward_pooled = res_forward[1]
+            res_forward = self.utterance_encoder_forward.build_encoder(training_x, xmask=training_hs_mask, return_L2_pooling = self.encode_with_l2_pooling)
 
             logger.debug("Initializing backward utterance encoder")
             self.utterance_encoder_backward = UtteranceEncoder(self.state, self.rng, self.W_emb, self)
-
             logger.debug("Build backward utterance encoder")
-            res_backward = self.utterance_encoder_backward.build_encoder(training_x_reversed, xmask=training_hs_mask, return_L2_pooling = True)
-            self.h_backward = res_backward[0]
-            self.h_backward_pooled = res_backward[1]
+            res_backward = self.utterance_encoder_backward.build_encoder(training_x_reversed, xmask=training_hs_mask, return_L2_pooling = self.encode_with_l2_pooling)
 
-            # The encoder h embedding is a concatenation of L2 pooling on the forward and backward encoder RNNs
-            self.h = T.concatenate([self.h_forward_pooled, self.h_backward_pooled], axis=2)
-
+            if self.encode_with_l2_pooling:
+                # The encoder h embedding is a concatenation of L2 pooling on the forward and backward encoder RNNs
+                self.h = T.concatenate([res_forward[1], res_backward[1]], axis=2)
+            else: 
+                # The encoder h embedding is a concatenation of the final states of the forward and backward encoder RNNs
+                self.h = T.concatenate([res_forward, res_backward], axis=2)
         else:
             logger.debug("Initializing utterance encoder")
             self.utterance_encoder = UtteranceEncoder(self.state, self.rng, self.W_emb, self)
 
             logger.debug("Build utterance encoder")
             # The encoder h embedding is the final hidden state of the forward encoder RNN
-            self.h = self.utterance_encoder.build_encoder(training_x, xmask=training_hs_mask)
+            self.h = self.utterance_encoder.build_encoder(training_x, xmask=training_hs_mask, return_L2_pooling = self.encode_with_l2_pooling)
 
         logger.debug("Initializing dialog encoder")
         self.dialog_encoder = DialogEncoder(self.state, self.rng, self)
