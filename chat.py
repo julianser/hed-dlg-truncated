@@ -124,6 +124,10 @@ def main():
 
 if __name__ == "__main__":
     # Run with THEANO_FLAGS=mode=FAST_RUN,floatX=float32,allow_gc=True,scan.allow_gc=False,nvcc.flags=-use_fast_math python chat.py Model_Name
+
+    # Models only run with float32
+    assert(theano.config.floatX == 'float32')
+
     main()
 
 

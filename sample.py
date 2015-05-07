@@ -97,4 +97,8 @@ def main():
     output_handle.close()
 
 if __name__ == "__main__":
+    # Models only run with float32
+    assert(theano.config.floatX == 'float32')
+
     main()
+

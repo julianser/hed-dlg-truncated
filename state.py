@@ -125,12 +125,12 @@ def prototype_test():
 
     state['sent_step_type'] = 'gated'
     state['triple_step_type'] = 'gated' 
-    state['bidirectional_utterance_encoder'] = False 
+    state['bidirectional_utterance_encoder'] = True 
 
      
     # If out of memory, modify this!
     state['bs'] = 20
-    state['use_nce'] = True
+    state['use_nce'] = False
     state['decoder_bias_type'] = 'all' #'selective' 
     
     state['qdim'] = 50 
@@ -151,7 +151,7 @@ def prototype_moviedic():
     state['save_dir'] = "Output" 
     
     # Handle bleu evaluation
-    state['bleu_evaluation'] = "Data/Validation_Shuffled_Dataset.txt"
+    state['bleu_evaluation'] = "Data/Mini_Validation_Shuffled_Dataset.txt"
     state['bleu_context_length'] = 2
 
     # Handle pretrained word embeddings. Using this requires rankdim=15

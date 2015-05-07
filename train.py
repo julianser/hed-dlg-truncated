@@ -508,5 +508,8 @@ def parse_args():
     return args
 
 if __name__ == "__main__":
+    # Models only run with float32
+    assert(theano.config.floatX == 'float32')
+
     args = parse_args()
     main(args)
