@@ -128,8 +128,10 @@ def main(args):
 
     logger.debug("Compile trainer")
     if not state["use_nce"]:
+        logger.debug("Training with exact log-likelihood")
         train_batch = model.build_train_function()
     else:
+        logger.debug("Training with noise contrastive estimation")
         train_batch = model.build_nce_function()
 
     eval_batch = model.build_eval_function()

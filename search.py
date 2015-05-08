@@ -28,6 +28,7 @@ class BeamSearch(object):
         self.qdim = self.model.qdim
         self.compiled = False
         self.sdim = self.model.sdim
+        self.direct_connection_between_encoders_and_decoder = self.model.direct_connection_between_encoders_and_decoder
 
     def compile(self):
         logger.debug("Compiling beam search functions")
@@ -43,6 +44,7 @@ class BeamSearch(object):
 
         # Convert to column vector
         context = numpy.array(context, dtype='int32')[:, None]
+        prev_h = numpy.zeros((beam_size, self.qdim), dtype='float32')
         prev_hd = numpy.zeros((beam_size, self.qdim), dtype='float32')
         prev_hs = numpy.zeros((beam_size, self.sdim), dtype='float32')
 
@@ -58,6 +60,7 @@ class BeamSearch(object):
         # Compute the context encoding and get
         # the last hierarchical state
         h, hs = self.compute_encoding(context, context_reversed)
+        prev_h[:] = h[-1]
         prev_hs[:] = hs[-1]
          
         fin_beam_gen = []
@@ -77,7 +80,12 @@ class BeamSearch(object):
                     if k > 0
                     else numpy.zeros(beam_size, dtype="int32") + self.eos_sym)
 
-            outputs, hd = self.next_probs_predictor(prev_hs, prev_words, prev_hd)
+            if self.direct_connection_between_encoders_and_decoder:
+                prev_hs_and_h = numpy.concatenate([prev_hs, prev_h], axis=1)
+                outputs, hd = self.next_probs_predictor(prev_hs_and_h, prev_words, prev_hd)
+            else:
+                outputs, hd = self.next_probs_predictor(prev_hs, prev_words, prev_hd)
+
             log_probs = numpy.log(outputs)
              
             # Adjust log probs according to search restrictions

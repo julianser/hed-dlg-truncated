@@ -38,6 +38,8 @@ def prototype_state():
     state['bidirectional_utterance_encoder'] = False
     # if turned on the L2 average pooling of the utterance encoders is used, otherwise the last state of the dialogue encoder(s) is used
     state['encode_with_l2_pooling'] = False
+
+    state['direct_connection_between_encoders_and_decoder'] = False
     
     # ----- SIZES ----
     # Dimensionality of hidden layers
@@ -128,8 +130,8 @@ def prototype_test():
 
     state['sent_step_type'] = 'gated'
     state['triple_step_type'] = 'gated' 
-    state['bidirectional_utterance_encoder'] = True 
-    state['encode_with_l2_pooling'] = True
+    state['bidirectional_utterance_encoder'] = False 
+    state['encode_with_l2_pooling'] = False
      
     # If out of memory, modify this!
     state['bs'] = 20
@@ -159,7 +161,7 @@ def prototype_moviedic():
 
     # Handle pretrained word embeddings. Using this requires rankdim=15
     state['initialize_from_pretrained_word_embeddings'] = True
-    state['pretrained_word_embeddings_file'] = 'Data/MT_WordEmb.pkl' 
+    state['pretrained_word_embeddings_file'] = 'Data/Word2Vec_Emb.pkl' 
     state['fix_pretrained_word_embeddings'] = True
 
     
