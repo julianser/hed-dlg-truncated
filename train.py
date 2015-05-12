@@ -502,7 +502,7 @@ def main(args):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--resume", type=str, default="", help="Resume training from that state")
-    parser.add_argument("--force_train_all_wordemb", action='store_true', help="If true, will force the model to train all word embeddings in the coder. This switch can be used to fine-tune a model which was trained with fixed (pretrained)  encoder word embeddings.")
+    parser.add_argument("--force_train_all_wordemb", action='store_true', help="If true, will force the model to train all word embeddings in the encoder. This switch can be used to fine-tune a model which was trained with fixed (pretrained)  encoder word embeddings.")
 
     parser.add_argument("--prototype", type=str, help="Use the prototype", default='prototype_state')
 

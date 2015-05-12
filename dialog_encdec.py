@@ -357,8 +357,12 @@ class UtteranceDecoder(EncoderDecoderBase):
     def init_params(self): 
         if self.direct_connection_between_encoders_and_decoder:
             # When there is a direct connection between encoder and decoder, 
-            # the total input has dimensionality sdim + qdim
-            input_dim = self.sdim + self.qdim
+            # the input has dimensionality sdim + qdim if forward encoder, and
+            # sdim + 2 x qdim for bidirectional encoder
+            if self.bidirectional_utterance_encoder:
+                input_dim = self.sdim + self.qdim*2
+            else:
+                input_dim = self.sdim + self.qdim
         else:
             # When there is no connection between encoder and decoder, 
             # the input has dimensionality sdim
