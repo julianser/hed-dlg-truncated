@@ -32,12 +32,8 @@ class Timer(object):
 def parse_args():
     parser = argparse.ArgumentParser("Sample (with beam-search) from the session model")
 
-    parser.add_argument("--n-samples",
-            default="1", type=int,
-            help="Number of samples")
-
     parser.add_argument("--ignore-unk",
-            default=True, action="store_true",
+            action="store_false",
             help="Ignore unknown words")
 
     parser.add_argument("model_prefix",
@@ -48,6 +44,18 @@ def parse_args():
 
     parser.add_argument("output",
             help="Output file")
+    
+    parser.add_argument("--beam_search",
+                        action="store_true",
+                        help="Use beam search instead of random search")
+
+    parser.add_argument("--n-samples",
+            default="1", type=int,
+            help="Number of samples")
+
+    parser.add_argument("--n-turns",
+                        default=1, type=int,
+                        help="Number of dialog turns to generate")
 
     parser.add_argument("--normalize",
             action="store_true", default=False,
@@ -72,24 +80,29 @@ def main():
 
     logging.basicConfig(level=getattr(logging, state['level']), format="%(asctime)s: %(name)s: %(levelname)s: %(message)s")
 
-    model = DialogEncoderDecoder(state)
-    sampler = search.Sampler(model)
+    model = DialogEncoderDecoder(state) 
+    
+    sampler = search.RandomSampler(model)
+    if args.beam_search:
+        sampler = search.BeamSampler(model)
 
     if os.path.isfile(model_path):
         logger.debug("Loading previous model")
         model.load(model_path)
     else:
         raise Exception("Must specify a valid model path")
-
+    
     contexts = [[]]
     lines = open(args.context, "r").readlines()
-    contexts = [x.strip().split('\t') for x in lines]
-
+    if len(lines):
+        contexts = [x.strip().split('\t') for x in lines]
+    
     context_samples, context_costs = sampler.sample(contexts,
                                             n_samples=args.n_samples,
+                                            n_turns=args.n_turns,
                                             ignore_unk=args.ignore_unk,
                                             verbose=args.verbose)
-
+     
     # Write to output file
     output_handle = open(args.output, "w")
     for context_sample in context_samples:
@@ -97,8 +110,5 @@ def main():
     output_handle.close()
 
 if __name__ == "__main__":
-    # Models only run with float32
-    assert(theano.config.floatX == 'float32')
-
     main()
 

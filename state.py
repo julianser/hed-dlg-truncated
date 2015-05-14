@@ -132,6 +132,7 @@ def prototype_test():
     state['triple_step_type'] = 'gated' 
     state['bidirectional_utterance_encoder'] = False 
     state['encode_with_l2_pooling'] = False
+    state['direct_connection_between_encoders_and_decoder'] = True
      
     # If out of memory, modify this!
     state['bs'] = 20

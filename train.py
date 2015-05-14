@@ -136,7 +136,9 @@ def main(args):
 
     eval_batch = model.build_eval_function()
     eval_misclass_batch = model.build_eval_misclassification_function()
-    sample = model.build_sampling_function()
+
+    random_sampler = search.RandomSampler(model)
+    beam_sampler = search.BeamSampler(model) 
 
     logger.debug("Load data")
     train_data, \
@@ -147,7 +149,6 @@ def main(args):
     
     # Build the data structures for Bleu evaluation
     if 'bleu_evaluation' in state:
-        beam_sampler = search.Sampler(model)
         bleu_eval_n_1 = BleuEvaluator(n=1)
         bleu_eval_n_2 = BleuEvaluator(n=2)
         bleu_eval_n_3 = BleuEvaluator(n=3)
@@ -188,9 +189,10 @@ def main(args):
         if step % 200 == 0:
             for param in model.params:
                 print "%s = %.4f" % (param.name, numpy.sum(param.get_value() ** 2) ** 0.5)
-             
-            samples, log_probs = sample(1, state['len_sample'])
-            print "Sampled : {}".format(" ".join(model.indices_to_words(numpy.ravel(samples))))
+
+            samples, costs = random_sampler.sample([[]], n_samples=1, n_turns=3)
+            print "Sampled : {}".format(samples[0])
+
          
         # Training phase
         batch = train_data.next() 
@@ -427,10 +429,8 @@ def main(args):
                         pass
 
 
-
         if 'bleu_evaluation' in state and \
             step % state['valid_freq'] == 0 and step > 1:
-
             # Compute samples with beam search
             logger.debug("Executing beam search to get targets for bleu, jaccard etc.")
             samples, costs = beam_sampler.sample(contexts, n_samples=5, ignore_unk=True)
