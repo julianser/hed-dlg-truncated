@@ -367,7 +367,7 @@ class DialogDummyEncoder(EncoderDecoderBase):
         
         # if it is not one_step then we initialize everything to 0  
         if not one_step:
-            hs_0 = T.alloc(np.float32(0), batch_size, self.sdim) 
+            hs_0 = T.alloc(np.float32(0), batch_size, self.inp_dim) 
         # in sampling mode (i.e. one step) we require 
         else:
             # in this case x.ndim != 2
@@ -412,7 +412,8 @@ class DialogDummyEncoder(EncoderDecoderBase):
 
         return hs 
 
-    def __init__(self, state, rng, parent):
+    def __init__(self, state, rng, parent, inp_dim):
+        self.inp_dim = inp_dim
         EncoderDecoderBase.__init__(self, state, rng, parent)
 
 
@@ -868,7 +869,7 @@ class DialogEncoderDecoder(Model):
 
                 if self.direct_connection_between_encoders_and_decoder:
                     hs_dummy = self.dialog_dummy_encoder.build_encoder(h, self.aug_x_data)
-                    hs_and_hs_dummy = T.concatenate([self.hs, self.h], axis=2)
+                    hs_and_hs_dummy = T.concatenate([hs, h], axis=2)
                     self.encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length],
                         outputs=[h, hs_and_hs_dummy], on_unused_input='warn', name="encoder_fn")
                 else:
@@ -885,7 +886,7 @@ class DialogEncoderDecoder(Model):
 
                 if self.direct_connection_between_encoders_and_decoder:
                     hs_dummy = self.dialog_dummy_encoder.build_encoder(h, self.aug_x_data)
-                    hs_and_hs_dummy = T.concatenate([self.hs, self.h], axis=2)
+                    hs_and_hs_dummy = T.concatenate([hs, hs_dummy], axis=2)
                     self.encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length],
                         outputs=[h, hs_and_hs_dummy], on_unused_input='warn', name="encoder_fn")
                 else:
@@ -1011,13 +1012,16 @@ class DialogEncoderDecoder(Model):
         if self.direct_connection_between_encoders_and_decoder:
 
             logger.debug("Initializing dialog dummy encoder")
-            self.dialog_dummy_encoder = DialogDummyEncoder(self.state, self.rng, self)
+            if self.bidirectional_utterance_encoder:
+                self.dialog_dummy_encoder = DialogDummyEncoder(self.state, self.rng, self, self.qdim*2)
+            else:
+                self.dialog_dummy_encoder = DialogDummyEncoder(self.state, self.rng, self, self.qdim)
 
             logger.debug("Build dialog dummy encoder")
             self.hs_dummy = self.dialog_dummy_encoder.build_encoder(self.h, training_x, xmask=training_hs_mask)
 
             logger.debug("Build decoder (NCE) with direct connection from encoder(s)")
-            self.hs_and_hs_dummy = T.concatenate([self.hs, self.h], axis=2)
+            self.hs_and_hs_dummy = T.concatenate([self.hs, self.hs_dummy], axis=2)
 
             contrastive_cost, self.hd_nce = self.utterance_decoder.build_decoder(self.hs_and_hs_dummy, training_x, y_neg=self.y_neg, y=training_y, xmask=training_hs_mask, mode=UtteranceDecoder.NCE)
 

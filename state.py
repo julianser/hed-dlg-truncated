@@ -130,12 +130,13 @@ def prototype_test():
 
     state['sent_step_type'] = 'gated'
     state['triple_step_type'] = 'gated' 
-    state['bidirectional_utterance_encoder'] = False 
-    state['encode_with_l2_pooling'] = False
+    state['bidirectional_utterance_encoder'] = True 
+    state['encode_with_l2_pooling'] = True
     state['direct_connection_between_encoders_and_decoder'] = True
      
     # If out of memory, modify this!
     state['bs'] = 20
+    state['sort_k_batches'] = 1
     state['use_nce'] = False
     state['decoder_bias_type'] = 'all' #'selective' 
     

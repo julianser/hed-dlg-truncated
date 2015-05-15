@@ -46,7 +46,7 @@ class SSFetcher(threading.Thread):
 
                 # Append only if it is shorter than max_len
                 if len(s) <= diter.max_len:
-                    triples.append(s)
+                    triples.append([s, index])
 
             if len(triples):
                 diter.queue.put(triples)

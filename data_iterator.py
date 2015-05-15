@@ -106,13 +106,31 @@ def get_batch_iterator(rng, state):
                 if not len(data):
                     return
                 
-                x = numpy.asarray(list(itertools.chain(*data)))
+                number_of_batches = len(data)
+                data = list(itertools.chain.from_iterable(data))
+
+                # Split list of words from the triple index
+                data_x = []
+                data_indices = []
+                for i in range(len(data)):
+                    data_x.append(data[i][0])
+                    data_indices.append(data[i][1])
+
+                x = numpy.asarray(list(itertools.chain(data_x)))
+                x_indices = numpy.asarray(list(itertools.chain(data_indices)))
+
                 lens = numpy.asarray([map(len, x)])
                 order = numpy.argsort(lens.max(axis=0))
                  
-                for k in range(len(data)):
+                for k in range(number_of_batches):
                     indices = order[k * batch_size:(k + 1) * batch_size]
                     batch = create_padded_batch(state, [x[indices]])
+
+                    # Add dataset indices to batch
+                    #print 'x[indices]', x[indices]
+                    #print 'indices', indices
+                    batch['x_indices'] = x_indices[indices]
+
                     if batch:
                         yield batch
         
