@@ -26,6 +26,7 @@ def prototype_state():
     
     state['maxout_out'] = False
     state['deep_out'] = True
+    state['dcgm_encoder'] = False
 
     # ----- ACTIV ---- 
     state['sent_rec_activation'] = 'lambda x: T.tanh(x)'
@@ -101,6 +102,50 @@ def prototype_state():
 
     return state
 
+def dcgm_test():
+    state = prototype_state()
+    
+    # Fill your paths here! 
+    state['train_triples'] = "./tests/data/ttrain.triples.pkl"
+    state['test_triples'] = "./tests/data/ttest.triples.pkl"
+    state['valid_triples'] = "./tests/data/tvalid.triples.pkl"
+    state['dictionary'] = "./tests/data/ttrain.dict.pkl"
+    state['save_dir'] = "./tests/models/"
+    
+    # Handle bleu evaluation
+    state['bleu_evaluation'] = "./tests/bleu/bleu_evaluation"
+    state['bleu_context_length'] = 2
+
+    # Handle pretrained word embeddings. Using this requires rankdim=10
+    state['initialize_from_pretrained_word_embeddings'] = True
+    state['pretrained_word_embeddings_file'] = './tests/data/MT_WordEmb.pkl' 
+    state['fix_pretrained_word_embeddings'] = True
+    
+    # Validation frequency
+    state['valid_freq'] = 50
+    
+    # Varia
+    state['prefix'] = "dcgm_testmodel_" 
+    state['updater'] = 'adam'
+    
+    state['maxout_out'] = False
+    state['deep_out'] = True
+
+    state['dcgm_encoder'] = True 
+     
+    # If out of memory, modify this!
+    state['bs'] = 20
+    state['sort_k_batches'] = 1
+    state['use_nce'] = False
+    state['decoder_bias_type'] = 'all' #'selective' 
+    
+    state['qdim'] = 50 
+    # Dimensionality of triple hidden layer 
+    state['sdim'] = 100
+    # Dimensionality of low-rank approximation
+    state['rankdim'] = 10
+    return state
+
 def prototype_test():
     state = prototype_state()
     
@@ -116,7 +161,7 @@ def prototype_test():
     state['test_semantic'] = "./tests/data/ttest.semantic.pkl"
     state['valid_semantic'] = "./tests/data/tvalid.semantic.pkl"
     state['semantic_information_dim'] = 2
-    state['bootstrap_from_semantic_information'] = True
+    state['bootstrap_from_semantic_information'] = False
     state['semantic_information_start_weight'] = 0.95
     state['semantic_information_decrease_rate'] = 0.001
     

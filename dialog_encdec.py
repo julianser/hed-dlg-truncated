@@ -45,6 +45,82 @@ class EncoderDecoderBase():
          
         self.params = []
 
+class DCGMEncoder(EncoderDecoderBase):
+    def init_params(self, word_embedding_param):
+        # Initialzie W_emb to given word embeddings
+        assert(word_embedding_param != None)
+        self.W_emb = word_embedding_param
+        self.Wq_in = add_to_params(self.params, \
+                                   theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='dcgm_Wq_in'))
+        self.bq_in = add_to_params(self.params, \
+                                   theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='dcgm_bq_in'))
+        self.Ws_in = add_to_params(self.params, \
+                                   theano.shared(value=NormalInit(self.rng, self.qdim, self.sdim), name='dcgm_Ws_in'))
+        self.bs_in = add_to_params(self.params, \
+                                   theano.shared(value=np.zeros((self.sdim,), dtype='float32'), name='dcgm_bs_in'))
+
+    def mean_step(self, x_t, m_t, *args):
+        args = iter(args)
+         
+        # already computed avg 
+        avg_past = next(args)
+        n_past = next(args)
+        m_t = m_t
+        
+        # reset avg
+        avg_past_r = m_t[:, None] * avg_past 
+        n_past_r = m_t * n_past
+
+        n = n_past_r + 1.
+        avg = (avg_past_r * (n[:, None] - 1) + x_t) / n[:, None] 
+        # return state and pooled state
+        return avg, n
+
+    def approx_embedder(self, x):
+        return self.W_emb[x]
+
+    def build_encoder(self, x, xmask=None, **kwargs):
+        # One step not supported
+        assert len(kwargs) == 0
+        assert x.ndim == 2
+        
+        batch_size = x.shape[1] 
+        avg_0 = T.alloc(np.float32(0), batch_size, self.rankdim)
+        n_0 = T.alloc(np.float32(0), batch_size) 
+         
+        # in sampling mode (i.e. one step) we require 
+        xe = self.approx_embedder(x)
+        if xmask == None:
+            xmask = T.neq(x, self.eos_sym)
+        
+        # Here we roll the mask so we avoid the need for separate
+        # hr and h. The trick is simple: if the original mask is
+        # 0 1 1 0 1 1 1 0 0 0 0 0 -- batch is filled with eos_sym
+        # the rolled mask will be
+        # 0 0 1 1 0 1 1 1 0 0 0 0 -- roll to the right
+        # ^ ^
+        # two resets </s> <s>
+        # the first reset will reset h_init = 0
+        # the second will reset </s> and update given x_t = <s>
+        rolled_xmask = T.roll(xmask, 1, axis=0)
+
+        f_enc = self.mean_step
+        o_enc_info = [avg_0, n_0] 
+
+        _res, _ = theano.scan(f_enc,
+                              sequences=[xe, rolled_xmask],\
+                              outputs_info=o_enc_info)
+        
+        avg = _res[0]
+        # Linear activation
+        avg_q = T.dot(avg, self.Wq_in) + self.bq_in
+        avg_s = self.sent_rec_activation(T.dot(avg_q, self.Ws_in) + self.bs_in)
+        return avg_s
+
+    def __init__(self, state, rng, word_embedding_param, parent):
+        EncoderDecoderBase.__init__(self, state, rng, parent)
+        self.init_params(word_embedding_param)
+
 class UtteranceEncoder(EncoderDecoderBase):
     def init_params(self, word_embedding_param):
         # Initialzie W_emb to given word embeddings
@@ -416,7 +492,6 @@ class DialogDummyEncoder(EncoderDecoderBase):
         self.inp_dim = inp_dim
         EncoderDecoderBase.__init__(self, state, rng, parent)
 
-
 class UtteranceDecoder(EncoderDecoderBase):
     NCE = 0
     EVALUATION = 1
@@ -728,7 +803,6 @@ class UtteranceDecoder(EncoderDecoderBase):
 
         return output
 
-
 class DialogEncoderDecoder(Model):
     def indices_to_words(self, seq, exclude_start_end=True):
         """
@@ -900,6 +974,11 @@ class DialogEncoderDecoder(Model):
                 else:
                     self.encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length],
                         outputs=[h, hs], on_unused_input='warn', name="encoder_fn")
+            elif self.dcgm_encoder:
+                h = self.dcgm_encoder.build_encoder(self.aug_x_data)
+                hs = self.dialog_dummy_encoder.build_encoder(h, self.aug_x_data)
+                self.encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length], outputs=[h, hs], \
+                                                  on_unused_input='warn', name="encoder_fn")
             else:
                 if self.encode_with_l2_pooling:
                     # If we do pooling, then pick out the pooled element, otherwise there is only one element
@@ -1003,6 +1082,8 @@ class DialogEncoderDecoder(Model):
 
         # Build utterance encoders
         if self.bidirectional_utterance_encoder:
+            assert not self.dcgm_encoder
+
             logger.debug("Initializing forward utterance encoder")
             self.utterance_encoder_forward = UtteranceEncoder(self.state, self.rng, self.W_emb, self)
             logger.debug("Build forward utterance encoder")
@@ -1019,6 +1100,9 @@ class DialogEncoderDecoder(Model):
             else: 
                 # The encoder h embedding is a concatenation of the final states of the forward and backward encoder RNNs
                 self.h = T.concatenate([res_forward, res_backward], axis=2)
+        elif self.dcgm_encoder:
+            self.dcgm_encoder = DCGMEncoder(self.state, self.rng, self.W_emb, self)
+            self.h = self.dcgm_encoder.build_encoder(training_x, xmask=training_hs_mask)
         else:
             logger.debug("Initializing utterance encoder")
             self.utterance_encoder = UtteranceEncoder(self.state, self.rng, self.W_emb, self)
@@ -1037,8 +1121,18 @@ class DialogEncoderDecoder(Model):
         logger.debug("Initializing decoder")
         self.utterance_decoder = UtteranceDecoder(self.state, self.rng, self, self.dialog_encoder, self.W_emb)
 
-        if self.direct_connection_between_encoders_and_decoder:
+        if self.dcgm_encoder:
+            self.dialog_dummy_encoder = DialogDummyEncoder(self.state, self.rng, self, self.sdim)
+            self.hs_dummy = self.dialog_dummy_encoder.build_encoder(self.h, training_x, xmask=training_hs_mask)
+             
+            contrastive_cost, self.hd_nce = \
+                    self.utterance_decoder.build_decoder(self.hs_dummy, training_x, y_neg=self.y_neg, y=training_y, xmask=training_hs_mask, mode=UtteranceDecoder.NCE)
 
+            logger.debug("Build decoder (EVAL) for DCGM-I model")            
+            target_probs, self.hd, self.utterance_decoder_states, target_probs_full_matrix = \
+                   self.utterance_decoder.build_decoder(self.hs_dummy, training_x, xmask=training_hs_mask, y=training_y, mode=UtteranceDecoder.EVALUATION)
+
+        elif self.direct_connection_between_encoders_and_decoder:
             logger.debug("Initializing dialog dummy encoder")
             if self.bidirectional_utterance_encoder:
                 self.dialog_dummy_encoder = DialogDummyEncoder(self.state, self.rng, self, self.qdim*2)
@@ -1062,7 +1156,7 @@ class DialogEncoderDecoder(Model):
 
             logger.debug("Build decoder (EVAL)")
             target_probs, self.hd, self.utterance_decoder_states, target_probs_full_matrix = self.utterance_decoder.build_decoder(self.hs, training_x, xmask=training_hs_mask, y=training_y, mode=UtteranceDecoder.EVALUATION)
-        
+
         # Prediction cost and rank cost
         self.contrastive_cost = T.sum(contrastive_cost.flatten() * training_x_cost_mask)
         self.softmax_cost = -T.log(target_probs) * training_x_cost_mask
@@ -1107,6 +1201,9 @@ class DialogEncoderDecoder(Model):
         if self.bidirectional_utterance_encoder:
             self.params = self.global_params + self.utterance_encoder_forward.params + self.utterance_encoder_backward.params + self.dialog_encoder.params + self.utterance_decoder.params
             assert len(set(self.params)) == (len(self.global_params) + len(self.utterance_encoder_forward.params) + len(self.utterance_encoder_backward.params) + len(self.dialog_encoder.params) + len(self.utterance_decoder.params))
+        elif self.dcgm_encoder:
+            self.params = self.global_params + self.dcgm_encoder.params + self.utterance_decoder.params
+            assert len(set(self.params)) == (len(self.global_params) + len(self.dcgm_encoder.params) + len(self.utterance_decoder.params))
         else:
             self.params = self.global_params + self.utterance_encoder.params + self.dialog_encoder.params + self.utterance_decoder.params
             assert len(set(self.params)) == (len(self.global_params) + len(self.utterance_encoder.params) + len(self.dialog_encoder.params) + len(self.utterance_decoder.params))

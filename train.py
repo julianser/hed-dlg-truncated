@@ -388,8 +388,7 @@ def main(args):
 
                     valid_wordpreds_done += batch['num_preds']
 
-                    # Previously we used the incorrect estimate: batch['x'].shape[1]
-                    #valid_triples_done += len(x_semantic_nonempty_indices) 
+                    # TODO: Fix this. For the last validation / test batch, the last triples are empty but still counted here...
                     valid_triples_done += batch['x'].shape[1]
 
 
