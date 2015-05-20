@@ -88,111 +88,134 @@ def create_padded_batch(state, x):
         # Store also the last utterance in reverse
         X_last_utterance_reversed[0:(triple_length-start_of_last_utterance), idx] = numpy.copy(X_last_utterance[0:(triple_length-start_of_last_utterance), idx])
         X_last_utterance_reversed[1:(triple_length-start_of_last_utterance-1), idx] = (X_last_utterance_reversed[1:(triple_length-start_of_last_utterance-1), idx])[::-1]
-
      
     assert num_preds == numpy.sum(Xmask)
-    return {'x': X, 'x_reversed': X_reversed, 'x_mask': Xmask, 'x_last_utterance': X_last_utterance, 'x_last_utterance_reversed': X_last_utterance_reversed, 'x_mask_last_utterance': Xmask_last_utterance, 'x_start_of_last_utterance': X_start_of_last_utterance, 'num_preds': num_preds, 'max_length': max_length}
-
-def get_batch_iterator(rng, state):
-    class Iterator(SSIterator):
-        def __init__(self, *args, **kwargs):
-            SSIterator.__init__(self, rng, *args, **kwargs)
-            self.batch_iter = None
     
-        def get_homogenous_batch_iter(self, batch_size = -1):
-            while True:
-                k_batches = state['sort_k_batches']
-                batch_size = self.batch_size if (batch_size == -1) else batch_size 
-               
-                data = []
-                for k in range(k_batches):
-                    batch = SSIterator.next(self)
-                    if batch:
-                        data.append(batch)
-                
-                if not len(data):
-                    return
-                
-                number_of_batches = len(data)
-                data = list(itertools.chain.from_iterable(data))
+    return {'x': X,                                                 \
+            'x_reversed': X_reversed,                               \
+            'x_mask': Xmask,                                        \
+            'x_last_utterance': X_last_utterance,                   \
+            'x_last_utterance_reversed': X_last_utterance_reversed, \
+            'x_mask_last_utterance': Xmask_last_utterance,          \
+            'x_start_of_last_utterance': X_start_of_last_utterance, \
+            'num_preds': num_preds,                                 \
+            'max_length': max_length                                \
+           }
 
-                # Split list of words from the triple index
-                data_x = []
-                data_semantic = []
-                for i in range(len(data)):
-                    data_x.append(data[i][0])
-                    data_semantic.append(data[i][1])
+class Iterator(SSIterator):
+    def __init__(self, triple_file, batch_size, **kwargs):
+        SSIterator.__init__(self, triple_file, batch_size,                   \
+                            semantic_file=kwargs.pop('semantic_file', None), \
+                            max_len=kwargs.pop('max_len', -1),               \
+                            use_infinite_loop=kwargs.pop('use_infinite_loop', False))
+        # TODO: max_len should be handled here and SSIterator should zip semantic_data and 
+        # data. 
+        self.k_batches = kwargs.pop('sort_k_batches', 20)
+        # TODO: For backward compatibility. This should be removed in future versions
+        # i.e. remove all the x_reversed computations in the model itself.
+        self.state = kwargs.pop('state', None)
+        # ---------------- 
+        self.batch_iter = None
 
-                x = numpy.asarray(list(itertools.chain(data_x)))
-                x_semantic = numpy.asarray(list(itertools.chain(data_semantic)))
+    def get_homogenous_batch_iter(self, batch_size = -1):
+        while True:
+            batch_size = self.batch_size if (batch_size == -1) else batch_size 
+           
+            data = []
+            for k in range(self.k_batches):
+                batch = SSIterator.next(self)
+                if batch:
+                    data.append(batch)
+            
+            if not len(data):
+                return
+            
+            number_of_batches = len(data)
+            data = list(itertools.chain.from_iterable(data))
 
-                lens = numpy.asarray([map(len, x)])
-                order = numpy.argsort(lens.max(axis=0))
+            # Split list of words from the triple index
+            data_x = []
+            data_semantic = []
+            for i in range(len(data)):
+                data_x.append(data[i][0])
+                data_semantic.append(data[i][1])
+
+            x = numpy.asarray(list(itertools.chain(data_x)))
+            x_semantic = numpy.asarray(list(itertools.chain(data_semantic)))
+
+            lens = numpy.asarray([map(len, x)])
+            order = numpy.argsort(lens.max(axis=0))
                  
-                for k in range(number_of_batches):
-                    indices = order[k * batch_size:(k + 1) * batch_size]
-                    batch = create_padded_batch(state, [x[indices]])
+            for k in range(number_of_batches):
+                indices = order[k * batch_size:(k + 1) * batch_size]
+                batch = create_padded_batch(self.state, [x[indices]])
 
-                    # Add semantic information to batch; take care to fill with -1 (=n/a) whenever the batch is filled with empty triples
-                    if 'semantic_information_dim' in state:
-                        batch['x_semantic'] = - numpy.ones((state['bs'], state['semantic_information_dim'])).astype('int32')
-                        batch['x_semantic'][0:len(indices), :] = numpy.asarray(list(itertools.chain(x_semantic[indices]))).astype('int32')
-                    else:
-                        batch['x_semantic'] = None
+                # Add semantic information to batch; take care to fill with -1 (=n/a) whenever the batch is filled with empty triples
+                if 'semantic_information_dim' in self.state:
+                    batch['x_semantic'] = - numpy.ones((self.state['bs'], self.state['semantic_information_dim'])).astype('int32')
+                    batch['x_semantic'][0:len(indices), :] = numpy.asarray(list(itertools.chain(x_semantic[indices]))).astype('int32')
+                else:
+                    batch['x_semantic'] = None
 
-                    if batch:
-                        yield batch
-        
-        def start(self):
-            SSIterator.start(self)
-            self.batch_iter = None
+                if batch:
+                    yield batch
+    
+    def start(self):
+        SSIterator.start(self)
+        self.batch_iter = None
 
-        def next(self, batch_size = -1):
-            """ 
-            We can specify a batch size,
-            independent of the object initialization. 
-            """
-            if not self.batch_iter:
-                self.batch_iter = self.get_homogenous_batch_iter(batch_size)
-            try:
-                batch = next(self.batch_iter)
-            except StopIteration:
-                return None
-            return batch
+    def next(self, batch_size = -1):
+        """ 
+        We can specify a batch size,
+        independent of the object initialization. 
+        """
+        if not self.batch_iter:
+            self.batch_iter = self.get_homogenous_batch_iter(batch_size)
+        try:
+            batch = next(self.batch_iter)
+        except StopIteration:
+            return None
+        return batch
 
-    semantic_train_file = None
-    semantic_valid_file = None
-    semantic_test_file = None
-
+def get_train_iterator(state):
+    semantic_train_path = None
+    semantic_valid_path = None
+    
     if 'train_semantic' in state:
         assert state['valid_semantic']
-        assert state['test_semantic']
-        semantic_train_file = state['train_semantic']
-        semantic_valid_file = state['valid_semantic']
-        semantic_test_file = state['test_semantic']
-
+        semantic_train_path = state['train_semantic']
+        semantic_valid_path = state['valid_semantic']
+    
     train_data = Iterator(
-        batch_size=int(state['bs']),
-        triple_file=state['train_triples'],
-        semantic_file = semantic_train_file,
-        queue_size=100,
+        state['train_triples'],
+        int(state['bs']),
+        state=state,
+        seed=state['seed'],
+        semantic_file=semantic_train_path,
         use_infinite_loop=True,
         max_len=state['seqlen']) 
      
     valid_data = Iterator(
-        batch_size=int(state['bs']),
-        triple_file=state['valid_triples'],
-        semantic_file = semantic_valid_file,
+        state['valid_triples'],
+        int(state['bs']),
+        state=state,
+        seed=state['seed'],
+        semantic_file=semantic_valid_path,
         use_infinite_loop=False,
-        queue_size=100,
         max_len=state['seqlen'])
-    
-    test_data = Iterator(
-        batch_size=int(state['bs']),
-        triple_file=state['test_triples'],
-        semantic_file = semantic_test_file,
-        use_infinite_loop=False,
-        queue_size=100,
-        max_len=state['seqlen'])
+    return train_data, valid_data 
 
-    return train_data, valid_data, test_data
+def get_test_iterator(state):
+    assert 'test_triples' in state
+    test_path = state.get('test_triples')
+    semantic_test_path = state.get('test_semantic', None)
+
+    test_data = Iterator(
+        test_path,
+        int(state['bs']), 
+        state=state,
+        seed=state['seed'],
+        semantic_file=semantic_test_path,
+        use_infinite_loop=False,
+        max_len=state['seqlen'])
+    return test_data
