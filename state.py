@@ -15,7 +15,9 @@ def prototype_state():
     # These are end-of-sequence marks
     state['start_sym_sentence'] = '<s>'
     state['end_sym_sentence'] = '</s>'
-    state['end_sym_triple'] = '</t>'
+
+    # This is obsolete
+    #state['end_sym_triple'] = '</t>' 
     
     state['unk_sym'] = 0
     state['eot_sym'] = 3
@@ -108,6 +110,15 @@ def prototype_test():
     state['valid_triples'] = "./tests/data/tvalid.triples.pkl"
     state['dictionary'] = "./tests/data/ttrain.dict.pkl"
     state['save_dir'] = "./tests/models/"
+
+    # Paths for semantic information 
+    state['train_semantic'] = "./tests/data/ttrain.semantic.pkl"
+    state['test_semantic'] = "./tests/data/ttest.semantic.pkl"
+    state['valid_semantic'] = "./tests/data/tvalid.semantic.pkl"
+    state['semantic_information_dim'] = 2
+    state['bootstrap_from_semantic_information'] = True
+    state['semantic_information_start_weight'] = 0.95
+    state['semantic_information_decrease_rate'] = 0.001
     
     # Handle bleu evaluation
     state['bleu_evaluation'] = "./tests/bleu/bleu_evaluation"
@@ -121,7 +132,7 @@ def prototype_test():
     # Validation frequency
     state['valid_freq'] = 50
     
-    # Varia
+    # Variables
     state['prefix'] = "testmodel_" 
     state['updater'] = 'adam'
     
@@ -130,10 +141,10 @@ def prototype_test():
 
     state['sent_step_type'] = 'gated'
     state['triple_step_type'] = 'gated' 
-    state['bidirectional_utterance_encoder'] = True 
-    state['encode_with_l2_pooling'] = True
-    state['direct_connection_between_encoders_and_decoder'] = True
-     
+    #state['bidirectional_utterance_encoder'] = True 
+    #state['encode_with_l2_pooling'] = True
+    #state['direct_connection_between_encoders_and_decoder'] = False
+
     # If out of memory, modify this!
     state['bs'] = 20
     state['sort_k_batches'] = 1
@@ -156,7 +167,27 @@ def prototype_moviedic():
     state['valid_triples'] = "Data/Validation.triples.pkl"
     state['dictionary'] = "Data/Training.dict.pkl" 
     state['save_dir'] = "Output" 
-    
+
+    # Paths for semantic information.
+    # When bootstrapping from semantic information, the cost function optimized is 
+    # a linear interpolation between the cross-entropy of genre prediction,
+    # and the cross-entropy of utterance decoder.
+    state['train_semantic'] = "Data/Training.genres.pkl"
+    state['test_semantic'] = "Data/Test.genres.pkl"
+    state['valid_semantic'] = "Data/Validation.genres.pkl"
+    state['semantic_information_dim'] = 16
+    state['bootstrap_from_semantic_information'] = True
+
+    # Sets the initial weight of the semantic bootstrapping.
+    # A weight of 0.95 means that the semantic bootstrapping will dominate in the beginning,
+    #  which is a reasonable way to regularize the model.
+    state['semantic_information_start_weight'] = 0.95
+
+    # This parameter controls the (linear) decay rate of the semantic information bootstrapping.
+    # Reasonable values for this parameter is between 0.0001-0.0008, because after seeing the 
+    #  entire moviescript corpus once or twice, the semantic bootstrapping will be zero.
+    state['semantic_information_decrease_rate'] = 0.0004 
+
     # Handle bleu evaluation
     state['bleu_evaluation'] = "Data/Mini_Validation_Shuffled_Dataset.txt"
     state['bleu_context_length'] = 2
@@ -165,7 +196,6 @@ def prototype_moviedic():
     state['initialize_from_pretrained_word_embeddings'] = True
     state['pretrained_word_embeddings_file'] = 'Data/Word2Vec_Emb.pkl' 
     state['fix_pretrained_word_embeddings'] = True
-
     
     # Validation frequency
     state['valid_freq'] = 2500

@@ -46,7 +46,11 @@ class SSFetcher(threading.Thread):
 
                 # Append only if it is shorter than max_len
                 if len(s) <= diter.max_len:
-                    triples.append([s, index])
+                    if not diter.semantic_data == None:
+                        triples.append([s, diter.semantic_data[index]])
+                    else:
+                        # Append 'None' to the triple if there is no semantic information
+                        triples.append([s, None])
 
             if len(triples):
                 diter.queue.put(triples)
@@ -60,6 +64,7 @@ class SSIterator(object):
                  rng,
                  batch_size,
                  triple_file=None,
+                 semantic_file=None,
                  dtype="int32",
                  can_fit=False,
                  queue_size=100,
@@ -79,6 +84,16 @@ class SSIterator(object):
         self.data = cPickle.load(open(self.triple_file, 'r'))
         self.data_len = len(self.data)
         logger.debug('Data len is %d' % self.data_len)
+
+        if not self.semantic_file == None:
+            self.semantic_data = cPickle.load(open(self.semantic_file, 'r'))
+            self.semantic_data_len = len(self.semantic_data)
+            logger.debug('Semantic data len is %d' % self.semantic_data_len)
+
+            # We need to have as many semantic labels as we have triples
+            assert self.semantic_data_len == self.data_len 
+        else:
+            self.semantic_data = None
 
     def start(self):
         self.exit_flag = False

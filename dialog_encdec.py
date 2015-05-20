@@ -791,13 +791,22 @@ class DialogEncoderDecoder(Model):
             updates = Adam(grads)
         else:
             raise Exception("Updater not understood!") 
+
+        if self.bootstrap_from_semantic_information:
+            updates.append((self.semantic_information_weight, T.maximum(self.semantic_information_weight - self.semantic_information_decrease_rate, 0)))
+
         return updates
   
     def build_train_function(self):
         if not hasattr(self, 'train_fn'):
             # Compile functions
-            logger.debug("Building train function")
-            self.train_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_cost_mask],
+            if self.bootstrap_from_semantic_information:
+                logger.debug("Building train function, which will return acc_cost equal to bootstrap cost plus NLL.")
+            else:
+                logger.debug("Building train function")
+                
+
+            self.train_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_cost_mask, self.x_semantic_targets],
                                             outputs=self.training_cost,
                                             updates=self.updates, 
                                             on_unused_input='warn', 
@@ -808,9 +817,14 @@ class DialogEncoderDecoder(Model):
     def build_nce_function(self):
         if not hasattr(self, 'train_fn'):
             # Compile functions
-            logger.debug("Building train function")
-            self.nce_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.y_neg, self.x_max_length, self.x_cost_mask],
-                                            outputs=self.contrastive_cost,
+            if self.bootstrap_from_semantic_information:
+                logger.debug("Building NCE train function, which will return acc_cost equal to bootstrap cost plus NLL.")
+            else:
+                logger.debug("Building NCE train function")
+
+
+            self.nce_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.y_neg, self.x_max_length, self.x_cost_mask, self.x_semantic_targets],
+                                            outputs=self.training_cost,
                                             updates=self.updates, 
                                             on_unused_input='warn', 
                                             name="train_fn") 
@@ -833,6 +847,17 @@ class DialogEncoderDecoder(Model):
                                             outputs=self.training_misclassification, name="eval_misclass_fn", on_unused_input='ignore')
 
         return self.eval_misclass_fn
+
+    def build_semantic_eval_function(self):
+        if not hasattr(self, 'sem_fn'):
+            # Compile functions
+            logger.debug("Building semantic evaluation function")
+            self.sem_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_cost_mask, self.x_semantic_targets],
+                                            outputs=[self.semantic_cost, self.semantic_preds], 
+                                            on_unused_input='warn', 
+                                            name="sem_fn")
+
+        return self.sem_fn
 
     def build_get_states_function(self):
         if not hasattr(self, 'get_states_fn'):
@@ -898,7 +923,8 @@ class DialogEncoderDecoder(Model):
     def __init__(self, state):
         Model.__init__(self)    
         self.state = state
-        
+        self.global_params = []
+
         # Compatibility towards older models
         self.__dict__.update(state)
         self.rng = numpy.random.RandomState(state['seed']) 
@@ -937,6 +963,8 @@ class DialogEncoderDecoder(Model):
         self.x_data_reversed = T.imatrix('x_data_reversed')
         self.x_cost_mask = T.matrix('cost_mask')
         self.x_max_length = T.iscalar('x_max_length')
+
+        self.x_semantic_targets = T.imatrix('x_semantic')
         
         # The training is done with a trick. We append a special </s> at the beginning of the dialog
         # so that we can predict also the first sent in the dialog starting from the dialog beginning token (</s>).
@@ -968,10 +996,10 @@ class DialogEncoderDecoder(Model):
             assert(self.rankdim == pretrained_embeddings[1].shape[1])
 
             self.W_emb_pretrained_mask = theano.shared(pretrained_embeddings[1].astype(numpy.float32), name='W_emb_mask')
-            self.W_emb = add_to_params(self.params, theano.shared(value=pretrained_embeddings[0].astype(numpy.float32), name='W_emb'))
+            self.W_emb = add_to_params(self.global_params, theano.shared(value=pretrained_embeddings[0].astype(numpy.float32), name='W_emb'))
         else:
             # Initialize word embeddings randomly
-            self.W_emb = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.idim, self.rankdim), name='W_emb'))
+            self.W_emb = add_to_params(self.global_params, theano.shared(value=NormalInit(self.rng, self.idim, self.rankdim), name='W_emb'))
 
         # Build utterance encoders
         if self.bidirectional_utterance_encoder:
@@ -1034,29 +1062,57 @@ class DialogEncoderDecoder(Model):
 
             logger.debug("Build decoder (EVAL)")
             target_probs, self.hd, self.utterance_decoder_states, target_probs_full_matrix = self.utterance_decoder.build_decoder(self.hs, training_x, xmask=training_hs_mask, y=training_y, mode=UtteranceDecoder.EVALUATION)
-
-        # Init params
-        if self.bidirectional_utterance_encoder:
-            self.params = [self.W_emb] + self.utterance_encoder_forward.params + self.utterance_encoder_backward.params + self.dialog_encoder.params + self.utterance_decoder.params
-            assert len(set(self.params)) == (len([self.W_emb]) + len(self.utterance_encoder_forward.params) + len(self.utterance_encoder_backward.params) + len(self.dialog_encoder.params) + len(self.utterance_decoder.params))
-        else:
-            self.params = [self.W_emb] + self.utterance_encoder.params + self.dialog_encoder.params + self.utterance_decoder.params
-            assert len(set(self.params)) == (len([self.W_emb]) + len(self.utterance_encoder.params) + len(self.dialog_encoder.params) + len(self.utterance_decoder.params))
-         
+        
         # Prediction cost and rank cost
         self.contrastive_cost = T.sum(contrastive_cost.flatten() * training_x_cost_mask)
         self.softmax_cost = -T.log(target_probs) * training_x_cost_mask
         self.softmax_cost_acc = T.sum(self.softmax_cost)
 
-        # Mean squared error
-        self.training_cost = self.softmax_cost_acc
-        if self.use_nce:
-            self.training_cost = self.contrastive_cost
+        # Prediction accuracy
+        self.training_misclassification = T.sum(T.neq(T.argmax(target_probs_full_matrix, axis=2), training_y).flatten() * training_x_cost_mask)
+
+        # Compute training cost
+        if not 'bootstrap_from_semantic_information' in state:
+            self.bootstrap_from_semantic_information = False
+
+        if self.bootstrap_from_semantic_information:
+            # Build submodel to predict binary semantic labels as logistic regression on dialog encoder context
+
+            # Set the initial weight of the semantic bootstrapping
+            self.semantic_information_weight = theano.shared(float(self.semantic_information_start_weight))
+
+            self.W_semantic = add_to_params(self.global_params, theano.shared(value=NormalInit(self.rng, self.sdim, self.semantic_information_dim), name='W_sem'))
+            self.b_semantic = add_to_params(self.global_params, theano.shared(value=np.zeros((self.semantic_information_dim,), dtype='float32'), name='b_sem'))
+            self.semantic_loglinear_preds = T.dot(self.hs, self.W_semantic) + self.b_semantic 
+            self.semantic_preds = T.nnet.sigmoid(self.semantic_loglinear_preds)
+
+            self.semantic_cost = - (self.x_semantic_targets * T.log(self.semantic_preds) + (1 - self.x_semantic_targets) * T.log(1 - self.semantic_preds)) 
+            self.semantic_cost_acc = T.sum((1 - training_hs_mask)*T.sum(self.semantic_cost, axis=2)) / 3
+
+            # Retrieve negative log-likelihood cost
+            self.nll_cost = self.softmax_cost_acc / T.sum(training_x_cost_mask)
+            if self.use_nce:
+                self.nll_cost = self.contrastive_cost / T.sum(training_x_cost_mask)
+
+            # Training cost is linear combination of cross-entropy error on predicting the next utterance and predicting the semantic information
+            self.training_cost = self.semantic_information_weight * self.semantic_cost_acc + (1 - self.semantic_information_weight) * self.nll_cost
+
+        else:
+            # Training cost equals standard cross-entropy error
+            self.training_cost = self.softmax_cost_acc
+            if self.use_nce:
+                self.training_cost = self.contrastive_cost
+
+        # Init params
+        if self.bidirectional_utterance_encoder:
+            self.params = self.global_params + self.utterance_encoder_forward.params + self.utterance_encoder_backward.params + self.dialog_encoder.params + self.utterance_decoder.params
+            assert len(set(self.params)) == (len(self.global_params) + len(self.utterance_encoder_forward.params) + len(self.utterance_encoder_backward.params) + len(self.dialog_encoder.params) + len(self.utterance_decoder.params))
+        else:
+            self.params = self.global_params + self.utterance_encoder.params + self.dialog_encoder.params + self.utterance_decoder.params
+            assert len(set(self.params)) == (len(self.global_params) + len(self.utterance_encoder.params) + len(self.dialog_encoder.params) + len(self.utterance_decoder.params))
 
         self.updates = self.compute_updates(self.training_cost / training_x.shape[1], self.params)
 
-        # Prediction accuracy
-        self.training_misclassification = T.sum(T.neq(T.argmax(target_probs_full_matrix, axis=2), training_y).flatten() * training_x_cost_mask)
 
         # Beam-search variables
         self.beam_source = T.lvector("beam_source")

@@ -30,16 +30,20 @@ def safe_pickle(obj, filename):
 
 import argparse
 parser = argparse.ArgumentParser()
-parser.add_argument("input", type=str, help="Tab separated triple file (assumed shuffled)")
+parser.add_argument("input", type=str, help="Tab separated dialogue file (assumed shuffled)")
 parser.add_argument("--cutoff", type=int, default=-1, help="Vocabulary cutoff (optional)")
 parser.add_argument("--dict", type=str, default="", help="External dictionary (pkl file)")
-parser.add_argument("--use_all_triples", action='store_true', help="If false, all training examples with more than or less than three utterances will be removed. If true, training examples with less than three utterances will have empty utterances appended at the beginning, and training examples with more than three utterances will have their first utterances discarded.")
+parser.add_argument("--use_all_dialogues", action='store_true', help="If false, only examples with exactly three tripels will be used and all others discarded. If true, all examples will be used.")
+parser.add_argument("--force_triple_format", action='store_true', help="Requires use_all_dialogues set to true. If true, training examples with less than three utterances will have empty utterances appended at the beginning, and training examples with more than three utterances will have their first utterances discarded.")
 
 parser.add_argument("output", type=str, help="Prefix of the pickle binarized triple corpus")
 args = parser.parse_args()
 
 if not os.path.isfile(args.input):
     raise Exception("Input file not found!")
+
+if args.force_triple_format==True and args.use_all_dialogues==False:
+    raise Exception("Inconsistent flags. To force all dialogues into triple format, first set the flag use_all_dialogues.")
 
 unk = "<unk>"
 
@@ -120,17 +124,18 @@ for line, triple in enumerate(open(args.input, 'r')):
             df[1] += 1
             df[2] += 1
 
-    if args.use_all_triples == True:
+    if args.force_triple_format == True:
         if len(triple_lst) > 3:
             triple_lst = triple_lst[len(triple_lst)-2:len(triple_lst)]
         else:
             while len(triple_lst) < 3:
                 triple_lst.insert(0, [1] + [2])
 
-    if len(triple_lst) == 3:
+
+    if (args.use_all_dialogues ==True) or (len(triple_lst) == 3):
         # Flatten out binarized triple
         # [[a, b, c], [c, d, e]] -> [a, b, c, d, e]
-        binarized_triple = list(itertools.chain(*triple_lst)) 
+        binarized_triple = list(itertools.chain(*triple_lst))
         binarized_corpus.append(binarized_triple)
 
     unique_word_indices = []

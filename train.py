@@ -134,6 +134,9 @@ def main(args):
         logger.debug("Training with noise contrastive estimation")
         train_batch = model.build_nce_function()
 
+    if model.bootstrap_from_semantic_information:
+        eval_semantic_batch = model.build_semantic_eval_function()
+
     eval_batch = model.build_eval_function()
     eval_misclass_batch = model.build_eval_misclassification_function()
 
@@ -193,10 +196,9 @@ def main(args):
             samples, costs = random_sampler.sample([[]], n_samples=1, n_turns=3)
             print "Sampled : {}".format(samples[0])
 
-         
         # Training phase
         batch = train_data.next() 
-        
+
         # Train finished
         if not batch:
             # Restart training
@@ -209,12 +211,13 @@ def main(args):
         x_data_reversed = batch['x_reversed']
         max_length = batch['max_length']
         x_cost_mask = batch['x_mask']
+        x_semantic = batch['x_semantic']
 
         if state['use_nce']:
             y_neg = rng.choice(size=(10, max_length, x_data.shape[1]), a=model.idim, p=model.noise_probs).astype('int32')
-            c = train_batch(x_data, x_data_reversed, y_neg, max_length, x_cost_mask)
+            c = train_batch(x_data, x_data_reversed, y_neg, max_length, x_cost_mask, x_semantic)
         else:
-            c = train_batch(x_data, x_data_reversed, max_length, x_cost_mask)
+            c = train_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic)
 
         if numpy.isinf(c) or numpy.isnan(c):
             logger.warn("Got NaN cost .. skipping")
@@ -245,14 +248,16 @@ def main(args):
                                                                  math.exp(float(train_cost/train_done)), \
                                                                  float(train_misclass)/float(train_done))
 
-
-
         if valid_data is not None and\
             step % state['valid_freq'] == 0 and step > 1:
                 valid_data.start()
                 valid_cost = 0
                 valid_misclass = 0
                 valid_empirical_mutual_information = 0
+                if model.bootstrap_from_semantic_information:
+                    valid_semantic_cost = 0
+                    valid_semantic_misclass = 0
+
                 valid_wordpreds_done = 0
                 valid_triples_done = 0
 
@@ -287,7 +292,8 @@ def main(args):
                     x_data_reversed = batch['x_reversed']
                     max_length = batch['max_length']
                     x_cost_mask = batch['x_mask']
-                    
+                    x_semantic = batch['x_semantic']
+                    x_semantic_nonempty_indices = numpy.where(x_semantic >= 0)
 
                     c, c_list = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask)
 
@@ -363,7 +369,27 @@ def main(args):
                         valid_empirical_mutual_information += -c + marginal_first_utterances_loglikelihood + marginal_last_utterance_loglikelihood
                         valid_pmi_list[(nxt-triples_in_batch):nxt] = (-c_list*words_in_triples + marginal_first_utterances_loglikelihood_list + marginal_last_utterance_loglikelihood_list)[0:triples_in_batch]
 
+                    if model.bootstrap_from_semantic_information:
+                        # Compute cross-entropy error on predicting the semantic class and retrieve predictions
+                        sem_eval = eval_semantic_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic)
+
+                        # Evaluate only non-empty triples (empty triples are created to fill 
+                        #   the whole batch sometimes).
+                        sem_cost = sem_eval[0][-1, :, :]
+                        valid_semantic_cost += numpy.sum(sem_cost[x_semantic_nonempty_indices])
+
+                        # Compute misclassified predictions on last timestep over all labels
+                        sem_preds = sem_eval[1][-1, :, :]
+                        sem_preds_misclass = len(numpy.where(((x_semantic-0.5)*(sem_preds-0.5))[x_semantic_nonempty_indices] < 0)[0])
+
+
+                        valid_semantic_misclass += sem_preds_misclass
+
+
                     valid_wordpreds_done += batch['num_preds']
+
+                    # Previously we used the incorrect estimate: batch['x'].shape[1]
+                    #valid_triples_done += len(x_semantic_nonempty_indices) 
                     valid_triples_done += batch['x'].shape[1]
 
 
@@ -373,7 +399,6 @@ def main(args):
                 valid_misclass /= float(valid_wordpreds_done)
                 valid_empirical_mutual_information /= float(valid_triples_done)
 
-
                 if len(timings["valid_cost"]) == 0 or valid_cost < numpy.min(timings["valid_cost"]):
                     patience = state['patience']
                     # Saving model if decrease in validation cost
@@ -381,15 +406,18 @@ def main(args):
                 elif valid_cost >= timings["valid_cost"][-1] * state['cost_threshold']:
                     patience -= 1
 
-                print "** valid cost = %.4f, valid word-perplexity = %.4f, valid mean word-error = %.4f, valid emp. mutual information = %.4f, patience = %d" % (float(valid_cost), float(math.exp(valid_cost)), float(valid_misclass), valid_empirical_mutual_information, patience)
+                if model.bootstrap_from_semantic_information:
+                    valid_semantic_cost /= float(valid_triples_done)
+                    valid_semantic_misclass /= float(valid_triples_done)
+                    print "** valid semantic cost = %.4f, valid semantic misclass error = %.4f" % (float(valid_semantic_cost), float(valid_semantic_misclass))
+
+                print "** valid cost (NLL) = %.4f, valid word-perplexity = %.4f, valid mean word-error = %.4f, valid emp. mutual information = %.4f, patience = %d" % (float(valid_cost), float(math.exp(valid_cost)), float(valid_misclass), valid_empirical_mutual_information, patience)
 
                 timings["train_cost"].append(train_cost/train_done)
                 timings["train_misclass"].append(float(train_misclass)/float(train_done))
                 timings["valid_cost"].append(valid_cost)
                 timings["valid_misclass"].append(valid_misclass)
                 timings["valid_emi"].append(valid_empirical_mutual_information)
-
-
 
                 # Reset train cost, train misclass and train done
                 train_cost = 0
