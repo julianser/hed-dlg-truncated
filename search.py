@@ -47,7 +47,7 @@ def sample_wrapper(sample_logic):
             samples, costs = sample_logic(sampler, joined_context, **kwargs) 
              
             # Convert back indices to list of words
-            converted_samples = map(lambda sample : sampler.model.indices_to_words(sample), samples)
+            converted_samples = map(lambda sample : sampler.model.indices_to_words(sample, exclude_start_end=kwargs.get('n_turns', 1) == 1), samples)
             # Join the list of words
             converted_samples = map(' '.join, converted_samples)
 
@@ -117,13 +117,7 @@ class Sampler(object):
                 reversed_context[(prev_eos_index+2):eos_index, idx] = (reversed_context[(prev_eos_index+2):eos_index, idx])[::-1]
                 prev_eos_index = eos_index
 
-        if self.model.bidirectional_utterance_encoder:
-            prev_h = numpy.zeros((n_samples, self.model.qdim*2), dtype='float32')
-        else:
-            prev_h = numpy.zeros((n_samples, self.model.qdim), dtype='float32')
-
         prev_hd = numpy.zeros((n_samples, self.model.qdim), dtype='float32')
-
         if self.model.direct_connection_between_encoders_and_decoder:
             if self.model.bidirectional_utterance_encoder:
                 prev_hs = numpy.zeros((n_samples, self.model.sdim+self.model.qdim*2), dtype='float32')
@@ -168,7 +162,6 @@ class Sampler(object):
                                 if prev_word == self.model.eos_sym]
             if len(indx_update_hs):
                 encoder_states = self.compute_encoding(context[:, indx_update_hs], reversed_context[:, indx_update_hs], self.model.seqlen)
-                prev_h[indx_update_hs] = encoder_states[0][-1]
                 prev_hs[indx_update_hs] = encoder_states[1][-1]
             
             # ... done
@@ -227,7 +220,7 @@ class Sampler(object):
 
             prev_hd = new_hd[new_sources]
             prev_hs = prev_hs[new_sources]
-            prev_h = prev_h[new_sources]
+            
             context = context[:, new_sources]
             reversed_context = reversed_context[:, new_sources]
             gen = new_gen
