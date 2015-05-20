@@ -91,7 +91,7 @@ def main():
     logger.debug("[TEST END]") 
     
     test_cost /= float(test_done) 
-    print "** test entr. = %.4f, perpl. = %.4f" % (float(test_cost), 2**(test_cost))
+    print "** test entr. = %.4f, perpl. = %.4f" % (float(test_cost), numpy.exp(test_cost))
 
 if __name__ == "__main__":
     main()
