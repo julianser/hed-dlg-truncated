@@ -145,9 +145,7 @@ def main(args):
 
     logger.debug("Load data")
     train_data, \
-    valid_data, \
-    test_data = get_batch_iterator(rng, state)
-    
+    valid_data, = get_train_iterator(state)
     train_data.start()
     
     # Build the data structures for Bleu evaluation
