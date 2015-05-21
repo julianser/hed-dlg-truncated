@@ -24,6 +24,7 @@ def prototype_state():
     state['eos_sym'] = 2
     state['sos_sym'] = 1
     
+    # Maxout requires qdim = 2x rankdim
     state['maxout_out'] = False
     state['deep_out'] = True
     state['dcgm_encoder'] = False

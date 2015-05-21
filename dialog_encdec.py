@@ -564,6 +564,11 @@ class UtteranceDecoder(EncoderDecoderBase):
         ######################   
         # Output layer weights
         ######################
+        if self.maxout_out:
+            if int(self.qdim) != 2*int(self.rankdim):
+                raise ValueError('Error with maxout configuration in UtteranceDecoder!'
+                                 + 'For maxout to work we need qdim = 2x rankdim')
+
         out_target_dim = self.qdim
         if not self.maxout_out:
             out_target_dim = self.rankdim
@@ -1005,9 +1010,24 @@ class DialogEncoderDecoder(Model):
         self.global_params = []
 
         # Compatibility towards older models
+        if not hasattr(state, 'dcgm_encoder'):
+            state['dcgm_encoder'] = False
+
+        if not hasattr(state, 'bootstrap_from_semantic_information'):
+            state['bootstrap_from_semantic_information'] = False
+
+        if not hasattr(state, 'bidirectional_utterance_encoder'):
+            state['bidirectional_utterance_encoder'] = False
+
+        if not hasattr(state, 'encode_with_l2_pooling'):
+            state['encode_with_l2_pooling'] = False
+
+        if not hasattr(state, 'direct_connection_between_encoders_and_decoder'):
+            state['direct_connection_between_encoders_and_decoder'] = False
+
         self.__dict__.update(state)
         self.rng = numpy.random.RandomState(state['seed']) 
-        
+
         # Load dictionary
         raw_dict = cPickle.load(open(self.dictionary, 'r'))
         
@@ -1079,6 +1099,7 @@ class DialogEncoderDecoder(Model):
         else:
             # Initialize word embeddings randomly
             self.W_emb = add_to_params(self.global_params, theano.shared(value=NormalInit(self.rng, self.idim, self.rankdim), name='W_emb'))
+
 
         # Build utterance encoders
         if self.bidirectional_utterance_encoder:
