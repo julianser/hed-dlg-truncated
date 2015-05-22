@@ -35,6 +35,7 @@ def create_padded_batch(state, x):
     # Fill X and Xmask
     # Keep track of number of predictions and maximum triple length
     num_preds = 0
+    num_preds_last_utterance = 0
     max_length = 0
     for idx in xrange(len(x[0])):
         # Insert sequence idx in a column of matrix X
@@ -80,6 +81,8 @@ def create_padded_batch(state, x):
         else: # If it is empty, then we define last utterance to start at the beginning
             start_of_last_utterance = 0
 
+        num_preds_last_utterance += triple_length - start_of_last_utterance
+
         X_start_of_last_utterance[idx] = start_of_last_utterance
         X_last_utterance[0:(triple_length-start_of_last_utterance), idx] = X[start_of_last_utterance:triple_length, idx]
         Xmask_last_utterance[0:(triple_length-start_of_last_utterance), idx] = Xmask[start_of_last_utterance:triple_length, idx]
@@ -99,6 +102,8 @@ def create_padded_batch(state, x):
             'x_mask_last_utterance': Xmask_last_utterance,          \
             'x_start_of_last_utterance': X_start_of_last_utterance, \
             'num_preds': num_preds,                                 \
+            'num_preds_ast_utterance': num_preds_last_utterance,    \
+            'num_triples': len(x[0]),                               \
             'max_length': max_length                                \
            }
 

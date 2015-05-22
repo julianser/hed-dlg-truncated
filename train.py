@@ -385,9 +385,7 @@ def main(args):
 
 
                     valid_wordpreds_done += batch['num_preds']
-
-                    # TODO: Fix this. For the last validation / test batch, the last triples are empty but still counted here...
-                    valid_triples_done += batch['x'].shape[1]
+                    valid_triples_done += batch['num_triples']
 
 
                 logger.debug("[VALIDATION END]") 
