@@ -28,7 +28,7 @@ import pylab
 
 logger = logging.getLogger(__name__)
 
-# List of all 77 English pronouns, all puntucation signs inclduded in MovieTriples and other special tokens.
+# List of all 77 English pronouns, all puntucation signs included in MovieTriples and other special tokens.
 stopwords = "all another any anybody anyone anything both each each other either everybody everyone everything few he her hers herself him himself his I it its itself many me mine more most much myself neither no one nobody none nothing one one another other others ours ourselves several she some somebody someone something that their theirs them themselves these they this those us we what whatever which whichever who whoever whom whomever whose you your yours yourself yourselves . , ? ' - -- ! <unk> </s> <s>"
 
 def parse_args():
@@ -201,7 +201,7 @@ def main():
             for word_index in stopwords_indices:
                 x_cost_mask_last_utterance[x_data_last_utterance == word_index] = 0
 
-        batch['num_preds_ast_utterance'] = numpy.sum(x_cost_mask_last_utterance)
+        batch['num_preds_at_utterance'] = numpy.sum(x_cost_mask_last_utterance)
 
         marginal_last_utterance_loglikelihood, marginal_last_utterance_loglikelihood_list = eval_batch(x_data_last_utterance, x_data_last_utterance_reversed, max_length, x_cost_mask_last_utterance)
 
@@ -247,7 +247,7 @@ def main():
 
 
         test_wordpreds_done += batch['num_preds']
-        test_wordpreds_done_last_utterance += batch['num_preds_ast_utterance']
+        test_wordpreds_done_last_utterance += batch['num_preds_at_utterance']
         test_triples_done += batch['num_triples']
      
     logger.debug("[TEST END]") 

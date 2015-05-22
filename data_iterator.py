@@ -102,7 +102,7 @@ def create_padded_batch(state, x):
             'x_mask_last_utterance': Xmask_last_utterance,          \
             'x_start_of_last_utterance': X_start_of_last_utterance, \
             'num_preds': num_preds,                                 \
-            'num_preds_ast_utterance': num_preds_last_utterance,    \
+            'num_preds_at_utterance': num_preds_last_utterance,    \
             'num_triples': len(x[0]),                               \
             'max_length': max_length                                \
            }

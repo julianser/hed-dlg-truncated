@@ -1006,24 +1006,25 @@ class DialogEncoderDecoder(Model):
 
     def __init__(self, state):
         Model.__init__(self)    
-        self.state = state
-        self.global_params = []
 
         # Compatibility towards older models
-        if not hasattr(state, 'dcgm_encoder'):
+        if not 'dcgm_encoder' in state:
             state['dcgm_encoder'] = False
 
-        if not hasattr(state, 'bootstrap_from_semantic_information'):
+        if not 'bootstrap_from_semantic_information' in state:
             state['bootstrap_from_semantic_information'] = False
 
-        if not hasattr(state, 'bidirectional_utterance_encoder'):
+        if not 'bidirectional_utterance_encoder' in state:
             state['bidirectional_utterance_encoder'] = False
 
-        if not hasattr(state, 'encode_with_l2_pooling'):
+        if not 'encode_with_l2_pooling' in state:
             state['encode_with_l2_pooling'] = False
 
-        if not hasattr(state, 'direct_connection_between_encoders_and_decoder'):
+        if not 'direct_connection_between_encoders_and_decoder' in state:
             state['direct_connection_between_encoders_and_decoder'] = False
+
+        self.state = state
+        self.global_params = []
 
         self.__dict__.update(state)
         self.rng = numpy.random.RandomState(state['seed']) 
