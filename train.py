@@ -217,6 +217,16 @@ def main(args):
         else:
             c = train_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic)
 
+        # HACK TO TIE BIDIRECTIONAL PARAMETERS
+        if hasattr(model, 'bidirectional_utterance_encoder') and hasattr(model, 'tie_encoder_parameters'):
+            if model.bidirectional_utterance_encoder:
+                if model.tie_encoder_parameters:
+                    for fwd_param, bck_param in zip(model.utterance_encoder_forward.params, model.utterance_encoder_backward.params):
+                        average_param = (fwd_param.get_value()+bck_param.get_value())/2
+                        fwd_param.set_value(average_param)
+                        bck_param.set_value(average_param)
+
+
         if numpy.isinf(c) or numpy.isnan(c):
             logger.warn("Got NaN cost .. skipping")
             continue

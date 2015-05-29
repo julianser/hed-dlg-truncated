@@ -91,6 +91,7 @@ def main():
     # Variables to store test statistics
     test_cost = 0
     test_cost_first_utterances = 0
+    test_cost_last_utterance_marginal = 0
     test_misclass = 0
     test_misclass_first_utterances = 0
     test_empirical_mutual_information = 0
@@ -225,6 +226,10 @@ def main():
         # Store log P(U_1, U_2) cost computed during mutual information
         test_cost_first_utterances += marginal_first_utterances_loglikelihood
 
+        # Store marginal log P(U_3)
+        test_cost_last_utterance_marginal += marginal_last_utterance_loglikelihood
+
+
         # Compute word-error rate for first utterances
         miscl_first_utterances = eval_misclass_batch(x_data, x_data_reversed, max_length, x_cost_mask_first_utterances)
         test_misclass_first_utterances += miscl_first_utterances
@@ -252,6 +257,7 @@ def main():
      
     logger.debug("[TEST END]") 
 
+    test_cost_last_utterance_marginal /= test_wordpreds_done_last_utterance
     test_cost_last_utterance = (test_cost - test_cost_first_utterances) / test_wordpreds_done_last_utterance
     test_cost /= test_wordpreds_done
     test_cost_first_utterances /= float(test_wordpreds_done - test_wordpreds_done_last_utterance)
@@ -266,7 +272,7 @@ def main():
         test_semantic_misclass /= float(test_done_triples)
         print "** test semantic cost = %.4f, test semantic misclass error = %.4f" % (float(test_semantic_cost), float(test_semantic_misclass))
 
-    print "** test cost (NLL) = %.4f, test word-perplexity = %.4f, test word-perplexity last utterance = %.4f, test mean word-error = %.4f, test mean word-error last utterance = %.4f, test emp. mutual information = %.4f" % (float(test_cost), float(math.exp(test_cost)), float(math.exp(test_cost_last_utterance)), float(test_misclass), float(test_misclass_last_utterance), test_empirical_mutual_information)
+    print "** test cost (NLL) = %.4f, test word-perplexity = %.4f, test word-perplexity last utterance = %.4f, , test word-perplexity marginal last utterance = %.4f, test mean word-error = %.4f, test mean word-error last utterance = %.4f, test emp. mutual information = %.4f" % (float(test_cost), float(math.exp(test_cost)), float(math.exp(test_cost_last_utterance)), float(math.exp(test_cost_last_utterance_marginal)), float(test_misclass), float(test_misclass_last_utterance), test_empirical_mutual_information)
 
     # Plot histogram over test costs
     if args.plot_graphs:

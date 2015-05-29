@@ -42,6 +42,8 @@ def prototype_state():
     state['bidirectional_utterance_encoder'] = False
     # if turned on the L2 average pooling of the utterance encoders is used, otherwise the last state of the dialogue encoder(s) is used
     state['encode_with_l2_pooling'] = False
+    #  if turned on, the bidirectional utterance encoders parameters are set equal to each other at the end of each training step (by taking both of them to be equal to their mean)
+    state['tie_encoder_parameters'] = False
 
     state['direct_connection_between_encoders_and_decoder'] = False
     
@@ -187,8 +189,10 @@ def prototype_test():
 
     state['sent_step_type'] = 'gated'
     state['triple_step_type'] = 'gated' 
-    #state['bidirectional_utterance_encoder'] = True 
-    #state['encode_with_l2_pooling'] = True
+    state['bidirectional_utterance_encoder'] = True 
+    state['encode_with_l2_pooling'] = True
+    state['tie_encoder_parameters'] = True
+
     #state['direct_connection_between_encoders_and_decoder'] = False
 
     # If out of memory, modify this!

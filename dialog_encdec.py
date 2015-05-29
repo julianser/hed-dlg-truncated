@@ -128,17 +128,17 @@ class UtteranceEncoder(EncoderDecoderBase):
         self.W_emb = word_embedding_param
 
         """ sent weights """
-        self.W_in = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='W_in'))
-        self.W_hh = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='W_hh'))
-        self.b_hh = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='b_hh'))
+        self.W_in = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='W_in'+self.name))
+        self.W_hh = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='W_hh'+self.name))
+        self.b_hh = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='b_hh'+self.name))
         
         if self.sent_step_type == "gated":
-            self.W_in_r = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='W_in_r'))
-            self.W_in_z = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='W_in_z'))
-            self.W_hh_r = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='W_hh_r'))
-            self.W_hh_z = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='W_hh_z'))
-            self.b_z = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='b_z'))
-            self.b_r = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='b_r'))
+            self.W_in_r = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='W_in_r'+self.name))
+            self.W_in_z = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='W_in_z'+self.name))
+            self.W_hh_r = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='W_hh_r'+self.name))
+            self.W_hh_z = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='W_hh_z'+self.name))
+            self.b_z = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='b_z'+self.name))
+            self.b_r = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='b_r'+self.name))
 
     def plain_sent_step(self, x_t, m_t, *args):
         do_pool = False
@@ -295,8 +295,9 @@ class UtteranceEncoder(EncoderDecoderBase):
             h = _res[0]
             return h
 
-    def __init__(self, state, rng, word_embedding_param, parent):
+    def __init__(self, state, rng, word_embedding_param, parent, name):
         EncoderDecoderBase.__init__(self, state, rng, parent)
+        self.name = name
         self.init_params(word_embedding_param)
 
 class DialogEncoder(EncoderDecoderBase):
@@ -854,10 +855,9 @@ class DialogEncoderDecoder(Model):
             # Keep pretrained word embeddings fixed
             logger.debug("Will use mask to fix pretrained word embeddings")
             grads[self.W_emb] = grads[self.W_emb] * self.W_emb_pretrained_mask
-
         else:
             logger.debug("Will train all word embeddings")
-            
+
         if self.updater == 'adagrad':
             updates = Adagrad(grads, self.lr)  
         elif self.updater == 'sgd':
@@ -1107,12 +1107,12 @@ class DialogEncoderDecoder(Model):
             assert not self.dcgm_encoder
 
             logger.debug("Initializing forward utterance encoder")
-            self.utterance_encoder_forward = UtteranceEncoder(self.state, self.rng, self.W_emb, self)
+            self.utterance_encoder_forward = UtteranceEncoder(self.state, self.rng, self.W_emb, self, 'fwd')
             logger.debug("Build forward utterance encoder")
             res_forward = self.utterance_encoder_forward.build_encoder(training_x, xmask=training_hs_mask, return_L2_pooling = self.encode_with_l2_pooling)
 
             logger.debug("Initializing backward utterance encoder")
-            self.utterance_encoder_backward = UtteranceEncoder(self.state, self.rng, self.W_emb, self)
+            self.utterance_encoder_backward = UtteranceEncoder(self.state, self.rng, self.W_emb, self, 'bck')
             logger.debug("Build backward utterance encoder")
             res_backward = self.utterance_encoder_backward.build_encoder(training_x_reversed, xmask=training_hs_mask, return_L2_pooling = self.encode_with_l2_pooling)
 
@@ -1127,7 +1127,7 @@ class DialogEncoderDecoder(Model):
             self.h = self.dcgm_encoder.build_encoder(training_x, xmask=training_hs_mask)
         else:
             logger.debug("Initializing utterance encoder")
-            self.utterance_encoder = UtteranceEncoder(self.state, self.rng, self.W_emb, self)
+            self.utterance_encoder = UtteranceEncoder(self.state, self.rng, self.W_emb, self, 'fwd')
 
             logger.debug("Build utterance encoder")
             # The encoder h embedding is the final hidden state of the forward encoder RNN
