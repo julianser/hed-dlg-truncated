@@ -234,7 +234,7 @@ def main(args):
         train_cost += c
 
         # Compute word-error rate
-        miscl = eval_misclass_batch(x_data, x_data_reversed, max_length, x_cost_mask)
+        miscl, _ = eval_misclass_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic)
         if numpy.isinf(c) or numpy.isnan(c):
             logger.warn("Got NaN misclassification .. skipping")
             continue
@@ -303,7 +303,7 @@ def main(args):
                     x_semantic = batch['x_semantic']
                     x_semantic_nonempty_indices = numpy.where(x_semantic >= 0)
 
-                    c, c_list = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask)
+                    c, c_list = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic)
 
                     c_list = c_list.reshape((batch['x'].shape[1],max_length), order=(1,0))
                     c_list = numpy.sum(c_list, axis=1)
@@ -336,7 +336,7 @@ def main(args):
                     valid_highest_triples = con_triples[con_indices]
 
                     # Compute word-error rate
-                    miscl = eval_misclass_batch(x_data, x_data_reversed, max_length, x_cost_mask)
+                    miscl, _ = eval_misclass_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic)
                     if numpy.isinf(c) or numpy.isnan(c):
                         continue
 
@@ -351,7 +351,7 @@ def main(args):
                         x_cost_mask_last_utterance = batch['x_mask_last_utterance']
                         x_start_of_last_utterance = batch['x_start_of_last_utterance']
 
-                        marginal_last_utterance_loglikelihood, marginal_last_utterance_loglikelihood_list = eval_batch(x_data_last_utterance, x_data_last_utterance_reversed, max_length, x_cost_mask_last_utterance)
+                        marginal_last_utterance_loglikelihood, marginal_last_utterance_loglikelihood_list = eval_batch(x_data_last_utterance, x_data_last_utterance_reversed, max_length, x_cost_mask_last_utterance, x_semantic)
 
                         marginal_last_utterance_loglikelihood_list = marginal_last_utterance_loglikelihood_list.reshape((batch['x'].shape[1],max_length), order=(1,0))
                         marginal_last_utterance_loglikelihood_list = numpy.sum(marginal_last_utterance_loglikelihood_list, axis=1)
@@ -364,7 +364,7 @@ def main(args):
                         for i in range(batch['x'].shape[1]):
                             x_cost_mask_first_utterances[x_start_of_last_utterance[i]:max_length, i] = 0
 
-                        marginal_first_utterances_loglikelihood, marginal_first_utterances_loglikelihood_list = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask_first_utterances)
+                        marginal_first_utterances_loglikelihood, marginal_first_utterances_loglikelihood_list = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask_first_utterances, x_semantic)
 
                         marginal_first_utterances_loglikelihood_list = marginal_first_utterances_loglikelihood_list.reshape((batch['x'].shape[1],max_length), order=(1,0))
                         marginal_first_utterances_loglikelihood_list = numpy.sum(marginal_first_utterances_loglikelihood_list, axis=1)
@@ -464,6 +464,7 @@ def main(args):
 
         if 'bleu_evaluation' in state and \
             step % state['valid_freq'] == 0 and step > 1:
+
             # Compute samples with beam search
             logger.debug("Executing beam search to get targets for bleu, jaccard etc.")
             samples, costs = beam_sampler.sample(contexts, n_samples=5, ignore_unk=True)

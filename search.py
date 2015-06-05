@@ -96,6 +96,12 @@ class Sampler(object):
         verbose = kwargs.get('verbose', False)
         n_turns = kwargs.get('n_turns', 1)
 
+        #TODO: Semantic information is currently fixed to zero. This should be replaced by a random multinoulli vector, where each entry is sampled proportional to its frequency.
+        semantic_info = numpy.zeros((1,1)).astype('int32')
+        if hasattr(self.model, 'add_semantic_information_to_utterance_decoder'):
+            if self.model.add_semantic_information_to_utterance_decoder:
+                semantic_info = numpy.zeros((n_samples, self.model.semantic_information_dim)).astype('int32')
+
         if not self.compiled:
             self.compile()
         
@@ -118,14 +124,22 @@ class Sampler(object):
                 prev_eos_index = eos_index
 
         prev_hd = numpy.zeros((n_samples, self.model.qdim), dtype='float32')
+
+
         if self.model.direct_connection_between_encoders_and_decoder:
             if self.model.bidirectional_utterance_encoder:
-                prev_hs = numpy.zeros((n_samples, self.model.sdim+self.model.qdim*2), dtype='float32')
+                dialog_enc_size = self.model.sdim+self.model.qdim*2
             else:
-                prev_hs = numpy.zeros((n_samples, self.model.sdim+self.model.qdim), dtype='float32')
+                dialog_enc_size = self.model.sdim+self.model.qdim
         else:
-            prev_hs = numpy.zeros((n_samples, self.model.sdim), dtype='float32')
-        
+            dialog_enc_size = self.model.sdim
+
+        if hasattr(self.model, 'add_semantic_information_to_utterance_decoder'):
+            if self.model.add_semantic_information_to_utterance_decoder:
+                dialog_enc_size += self.model.semantic_information_dim
+
+        prev_hs = numpy.zeros((n_samples, dialog_enc_size), dtype='float32')
+
         fin_gen = []
         fin_costs = []
          
@@ -161,7 +175,7 @@ class Sampler(object):
             indx_update_hs = [num for num, prev_word in enumerate(prev_words)
                                 if prev_word == self.model.eos_sym]
             if len(indx_update_hs):
-                encoder_states = self.compute_encoding(context[:, indx_update_hs], reversed_context[:, indx_update_hs], self.model.seqlen)
+                encoder_states = self.compute_encoding(context[:, indx_update_hs], reversed_context[:, indx_update_hs], self.model.seqlen, semantic_info)
                 prev_hs[indx_update_hs] = encoder_states[1][-1]
             
             # ... done

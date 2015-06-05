@@ -515,13 +515,16 @@ class UtteranceDecoder(EncoderDecoderBase):
             # the input has dimensionality sdim + qdim if forward encoder, and
             # sdim + 2 x qdim for bidirectional encoder
             if self.bidirectional_utterance_encoder:
-                input_dim = self.sdim + self.qdim*2
+                self.input_dim = self.sdim + self.qdim*2
             else:
-                input_dim = self.sdim + self.qdim
+                self.input_dim = self.sdim + self.qdim
         else:
             # When there is no connection between encoder and decoder, 
             # the input has dimensionality sdim
-            input_dim = self.sdim
+            self.input_dim = self.sdim
+
+        if self.add_semantic_information_to_utterance_decoder:
+           self.input_dim = self.input_dim + self.semantic_information_dim
 
         """ Decoder weights """
         self.bd_out = add_to_params(self.params, theano.shared(value=np.zeros((self.idim,), dtype='float32'), name='bd_out'))
@@ -530,7 +533,7 @@ class UtteranceDecoder(EncoderDecoderBase):
         self.Wd_hh = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='Wd_hh'))
         self.bd_hh = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='bd_hh'))
         self.Wd_in = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='Wd_in')) 
-        self.Wd_s_0 = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, input_dim, self.qdim), name='Wd_s_0'))
+        self.Wd_s_0 = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim), name='Wd_s_0'))
         self.bd_s_0 = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='bd_s_0'))
 
         if self.sent_step_type == "gated":
@@ -542,24 +545,24 @@ class UtteranceDecoder(EncoderDecoderBase):
             self.bd_z = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='bd_z'))
         
             if self.decoder_bias_type == 'all':
-                self.Wd_s_q = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, input_dim, self.qdim), name='Wd_s_q'))
-                self.Wd_s_z = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, input_dim, self.qdim), name='Wd_s_z'))
-                self.Wd_s_r = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, input_dim, self.qdim), name='Wd_s_r')) 
+                self.Wd_s_q = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim), name='Wd_s_q'))
+                self.Wd_s_z = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim), name='Wd_s_z'))
+                self.Wd_s_r = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim), name='Wd_s_r')) 
 
         if self.decoder_bias_type == 'selective':
-            self.bd_sel = add_to_params(self.params, theano.shared(value=np.zeros((input_dim,), dtype='float32'), name='bd_sel'))
-            self.Wd_s_q = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, input_dim, self.qdim), name='Wd_s_q'))
+            self.bd_sel = add_to_params(self.params, theano.shared(value=np.zeros((self.input_dim,), dtype='float32'), name='bd_sel'))
+            self.Wd_s_q = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim), name='Wd_s_q'))
             # s -> g_r
             self.Wd_sel_s = add_to_params(self.params, \
-                                          theano.shared(value=NormalInit(self.rng, input_dim, input_dim), \
+                                          theano.shared(value=NormalInit(self.rng, self.input_dim, self.input_dim), \
                                                         name='Wd_sel_s'))
             # x_{n-1} -> g_r
             self.Wd_sel_e = add_to_params(self.params, \
-                                          theano.shared(value=NormalInit(self.rng, self.rankdim, input_dim), \
+                                          theano.shared(value=NormalInit(self.rng, self.rankdim, self.input_dim), \
                                                         name='Wd_sel_e'))
             # h_{n-1} -> g_r
             self.Wd_sel_h = add_to_params(self.params, \
-                                          theano.shared(value=NormalInit(self.rng, self.qdim, input_dim), \
+                                          theano.shared(value=NormalInit(self.rng, self.qdim, self.input_dim), \
                                                         name='Wd_sel_h'))
          
         ######################   
@@ -582,7 +585,7 @@ class UtteranceDecoder(EncoderDecoderBase):
             self.bd_e_out = add_to_params(self.params, theano.shared(value=np.zeros((out_target_dim,), dtype='float32'), name='bd_e_out'))
              
             if self.decoder_bias_type != 'first': 
-                self.Wd_s_out = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, input_dim, out_target_dim), name='Wd_s_out'))
+                self.Wd_s_out = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, out_target_dim), name='Wd_s_out'))
    
     def build_output_layer(self, hs, xd, hd):
         pre_activ = T.dot(hd, self.Wd_out)
@@ -913,7 +916,7 @@ class DialogEncoderDecoder(Model):
         if not hasattr(self, 'eval_fn'):
             # Compile functions
             logger.debug("Building evaluation function")
-            self.eval_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_cost_mask], 
+            self.eval_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_cost_mask, self.x_semantic_targets], 
                                             outputs=[self.softmax_cost_acc, self.softmax_cost], 
                                             on_unused_input='warn', name="eval_fn")
         return self.eval_fn
@@ -922,8 +925,8 @@ class DialogEncoderDecoder(Model):
         if not hasattr(self, 'eval_misclass_fn'):
             # Compile functions
             logger.debug("Building misclassification evaluation function")
-            self.eval_misclass_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_cost_mask], 
-                                            outputs=self.training_misclassification, name="eval_misclass_fn", on_unused_input='ignore')
+            self.eval_misclass_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_cost_mask, self.x_semantic_targets], 
+                                            outputs=[self.training_misclassification_acc, self.training_misclassification], name="eval_misclass_fn", on_unused_input='ignore')
 
         return self.eval_misclass_fn
 
@@ -944,7 +947,7 @@ class DialogEncoderDecoder(Model):
             logger.debug("Building selective function")
             
             outputs = [self.h, self.hs, self.hd] + [x for x in self.utterance_decoder_states]
-            self.get_states_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length],
+            self.get_states_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_semantic_targets],
                                             outputs=outputs, on_unused_input='warn',
                                             name="get_states_fn")
         return self.get_states_fn
@@ -969,20 +972,29 @@ class DialogEncoderDecoder(Model):
                 else: # Each encoder gives a single output vector
                     h = T.concatenate([res_forward, res_backward], axis=2)
 
-                hs = self.dialog_encoder.build_encoder(h, self.aug_x_data)
+                if self.add_semantic_information_to_utterance_decoder:
+                    res_dialog_encoder = self.dialog_encoder.build_encoder(h, self.aug_x_data)
+                    #hs = T.concatenate([res_dialog_encoder, T.cast(self.x_semantic_targets, 'float32').dimshuffle(0, 1, 'x')], axis=2)
+                    res_semantic = T.cast(self.x_semantic_targets, 'float32').dimshuffle('x', 0, 1)
+                    #T.shape(res_dialog_encoder.shape)[0]
+                    #.dimshuffle('x', 0, 1), reps=res_dialog_encoder.shape[0])
+                    
+                    hs = T.concatenate([res_dialog_encoder, res_semantic.repeat(repeats=res_dialog_encoder.shape[0], axis=0)], axis=2)
+                else:
+                    hs = self.dialog_encoder.build_encoder(h, self.aug_x_data)
 
                 if self.direct_connection_between_encoders_and_decoder:
                     hs_dummy = self.dialog_dummy_encoder.build_encoder(h, self.aug_x_data)
                     hs_and_hs_dummy = T.concatenate([hs, h], axis=2)
-                    self.encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length],
+                    self.encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_semantic_targets],
                         outputs=[h, hs_and_hs_dummy], on_unused_input='warn', name="encoder_fn")
                 else:
-                    self.encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length],
+                    self.encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_semantic_targets],
                         outputs=[h, hs], on_unused_input='warn', name="encoder_fn")
             elif self.dcgm_encoder:
                 h = self.dcgm_encoder.build_encoder(self.aug_x_data)
                 hs = self.dialog_dummy_encoder.build_encoder(h, self.aug_x_data)
-                self.encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length], outputs=[h, hs], \
+                self.encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_semantic_targets], outputs=[h, hs], \
                                                   on_unused_input='warn', name="encoder_fn")
             else:
                 if self.encode_with_l2_pooling:
@@ -996,10 +1008,10 @@ class DialogEncoderDecoder(Model):
                 if self.direct_connection_between_encoders_and_decoder:
                     hs_dummy = self.dialog_dummy_encoder.build_encoder(h, self.aug_x_data)
                     hs_and_hs_dummy = T.concatenate([hs, hs_dummy], axis=2)
-                    self.encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length],
+                    self.encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_semantic_targets],
                         outputs=[h, hs_and_hs_dummy], on_unused_input='warn', name="encoder_fn")
                 else:
-                    self.encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length],
+                    self.encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_semantic_targets],
                         outputs=[h, hs], on_unused_input='warn', name="encoder_fn")
 
         return self.encoder_fn
@@ -1023,11 +1035,24 @@ class DialogEncoderDecoder(Model):
         if not 'direct_connection_between_encoders_and_decoder' in state:
             state['direct_connection_between_encoders_and_decoder'] = False
 
+        if not 'tie_encoder_parameters' in state:
+            state['tie_encoder_parameters'] = False
+
+        if not 'add_semantic_information_to_utterance_decoder' in state:
+            state['add_semantic_information_to_utterance_decoder'] = False
+
         self.state = state
         self.global_params = []
 
         self.__dict__.update(state)
         self.rng = numpy.random.RandomState(state['seed']) 
+
+        # Check model validity
+        if self.add_semantic_information_to_utterance_decoder:
+            if self.dcgm_encoder:
+                raise ValueError('Adding semantic input to decoder does not work with DCGM model!')
+            elif self.direct_connection_between_encoders_and_decoder:
+                raise ValueError('Adding semantic input to decoder does not work with direct connection between utterance encoder and decoder!')
 
         # Load dictionary
         raw_dict = cPickle.load(open(self.dictionary, 'r'))
@@ -1137,7 +1162,19 @@ class DialogEncoderDecoder(Model):
         self.dialog_encoder = DialogEncoder(self.state, self.rng, self)
 
         logger.debug("Build dialog encoder")
-        self.hs = self.dialog_encoder.build_encoder(self.h, training_x, xmask=training_hs_mask)
+        if self.add_semantic_information_to_utterance_decoder:
+            res_dialog_encoder = self.dialog_encoder.build_encoder(self.h, training_x, xmask=training_hs_mask) 
+
+            res_semantic = T.cast(self.x_semantic_targets, 'float32').dimshuffle('x', 0, 1)
+            self.hs = T.concatenate([res_dialog_encoder, res_semantic.repeat(repeats=res_dialog_encoder.shape[0], axis=0)], axis=2)
+
+            #hs = T.concatenate([res_dialog_encoder, res_semantic.repeat(repeats=res_dialog_encoder.shape[0], axis=0)], axis=2)
+
+
+            #self.hs = T.concatenate([res_dialog_encoder, T.cast(self.x_semantic_targets, 'float32').dimshuffle(0, 1, 'x')], axis=2)
+
+        else:
+            self.hs = self.dialog_encoder.build_encoder(self.h, training_x, xmask=training_hs_mask)
 
         # We initialize the decoder, and fix its word embeddings to that of the encoder(s)
         logger.debug("Initializing decoder")
@@ -1185,7 +1222,12 @@ class DialogEncoderDecoder(Model):
         self.softmax_cost_acc = T.sum(self.softmax_cost)
 
         # Prediction accuracy
-        self.training_misclassification = T.sum(T.neq(T.argmax(target_probs_full_matrix, axis=2), training_y).flatten() * training_x_cost_mask)
+        self.training_misclassification = T.neq(T.argmax(target_probs_full_matrix, axis=2), training_y).flatten() * training_x_cost_mask
+
+        self.training_misclassification_acc = T.sum(self.training_misclassification)
+
+        #self.training_misclassification = T.sum(T.neq(T.argmax(target_probs_full_matrix, axis=2), training_y).flatten() * training_x_cost_mask)
+
 
         # Compute training cost
         if not 'bootstrap_from_semantic_information' in state:
