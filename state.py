@@ -167,6 +167,8 @@ def prototype_test():
     state['bootstrap_from_semantic_information'] = False
     state['semantic_information_start_weight'] = 0.95
     state['semantic_information_decrease_rate'] = 0.001
+    state['add_semantic_information_to_utterance_decoder'] = False
+
     
     # Handle bleu evaluation
     state['bleu_evaluation'] = "./tests/bleu/bleu_evaluation"
@@ -191,7 +193,7 @@ def prototype_test():
     state['triple_step_type'] = 'gated' 
     state['bidirectional_utterance_encoder'] = True 
     state['encode_with_l2_pooling'] = True
-    state['tie_encoder_parameters'] = True
+    state['tie_encoder_parameters'] = False
 
     #state['direct_connection_between_encoders_and_decoder'] = False
 
