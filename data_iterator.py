@@ -13,6 +13,8 @@ import sys
 import pickle
 import random
 import datetime
+import math
+import copy
 
 logger = logging.getLogger(__name__)
 
@@ -33,44 +35,47 @@ def create_padded_batch(state, x):
     X_start_of_last_utterance = numpy.zeros((n), dtype='int32') 
 
     # Fill X and Xmask
-    # Keep track of number of predictions and maximum triple length
+    # Keep track of number of predictions and maximum dialogue length
     num_preds = 0
     num_preds_last_utterance = 0
     max_length = 0
     for idx in xrange(len(x[0])):
         # Insert sequence idx in a column of matrix X
-        triple_length = len(x[0][idx])
+        dialogue_length = len(x[0][idx])
 
         # Fiddle-it if it is too long ..
-        if mx < triple_length: 
+        if mx < dialogue_length: 
             continue
 
-        X[:triple_length, idx] = x[0][idx][:triple_length]
+        # Add eos symbol to beginning of dialogue to force model to generate first utterance too
+        assert x[0][idx][0] != state['eos_sym'] # check that the utterance does not begin with eos symbol
+        X[:dialogue_length+1, idx] = [state['eos_sym']] + x[0][idx][:dialogue_length]
+        dialogue_length = dialogue_length + 1
 
-        max_length = max(max_length, triple_length)
+        max_length = max(max_length, dialogue_length)
 
-        # Set the number of predictions == sum(Xmask), for cost purposes
-        num_preds += triple_length
+        # Set the number of predictions == sum(Xmask), for cost purposes, minus one (to exclude first eos symbol)
+        num_preds += dialogue_length - 1
         
         # Mark the end of phrase
         if len(x[0][idx]) < mx:
-            X[triple_length:, idx] = state['eos_sym']
+            X[dialogue_length:, idx] = state['eos_sym']
 
         # Initialize Xmask column with ones in all positions that
-        # were just set in X. 
+        # were just set in X (except for first eos symbol, because we are not evaluating this). 
         # Note: if we need mask to depend on tokens inside X, then we need to 
         # create a corresponding mask for X_reversed and send it further in the model
-        Xmask[:triple_length, idx] = 1.
+        Xmask[0:dialogue_length, idx] = 1.
 
         # Reverse all utterances
         sos_indices = numpy.where(X[:, idx] == state['sos_sym'])[0]
         eos_indices = numpy.where(X[:, idx] == state['eos_sym'])[0]
-        X_reversed[:triple_length, idx] = x[0][idx][:triple_length]
+        X_reversed[:, idx] = X[:, idx]
         prev_eos_index = -1
         for eos_index in eos_indices:
             X_reversed[(prev_eos_index+2):eos_index, idx] = (X_reversed[(prev_eos_index+2):eos_index, idx])[::-1]
             prev_eos_index = eos_index
-            if prev_eos_index > triple_length:
+            if prev_eos_index > dialogue_length:
                 break
 
         # Find start of last utterance and store the utterance
@@ -81,18 +86,19 @@ def create_padded_batch(state, x):
         else: # If it is empty, then we define last utterance to start at the beginning
             start_of_last_utterance = 0
 
-        num_preds_last_utterance += triple_length - start_of_last_utterance
+        num_preds_last_utterance += dialogue_length - start_of_last_utterance
 
         X_start_of_last_utterance[idx] = start_of_last_utterance
-        X_last_utterance[0:(triple_length-start_of_last_utterance), idx] = X[start_of_last_utterance:triple_length, idx]
-        Xmask_last_utterance[0:(triple_length-start_of_last_utterance), idx] = Xmask[start_of_last_utterance:triple_length, idx]
+        X_last_utterance[0:(dialogue_length-start_of_last_utterance), idx] = X[start_of_last_utterance:dialogue_length, idx]
+        Xmask_last_utterance[0:(dialogue_length-start_of_last_utterance), idx] = Xmask[start_of_last_utterance:dialogue_length, idx]
 
 
         # Store also the last utterance in reverse
-        X_last_utterance_reversed[0:(triple_length-start_of_last_utterance), idx] = numpy.copy(X_last_utterance[0:(triple_length-start_of_last_utterance), idx])
-        X_last_utterance_reversed[1:(triple_length-start_of_last_utterance-1), idx] = (X_last_utterance_reversed[1:(triple_length-start_of_last_utterance-1), idx])[::-1]
+        X_last_utterance_reversed[0:(dialogue_length-start_of_last_utterance), idx] = numpy.copy(X_last_utterance[0:(dialogue_length-start_of_last_utterance), idx])
+        X_last_utterance_reversed[1:(dialogue_length-start_of_last_utterance-1), idx] = (X_last_utterance_reversed[1:(dialogue_length-start_of_last_utterance-1), idx])[::-1]
      
-    assert num_preds == numpy.sum(Xmask)
+    #assert num_preds == numpy.sum(Xmask)
+    assert num_preds == numpy.sum(Xmask) - numpy.sum(Xmask[0, :])
     
     return {'x': X,                                                 \
             'x_reversed': X_reversed,                               \
@@ -102,14 +108,14 @@ def create_padded_batch(state, x):
             'x_mask_last_utterance': Xmask_last_utterance,          \
             'x_start_of_last_utterance': X_start_of_last_utterance, \
             'num_preds': num_preds,                                 \
-            'num_preds_at_utterance': num_preds_last_utterance,    \
-            'num_triples': len(x[0]),                               \
+            'num_preds_at_last_utterance': num_preds_last_utterance,\
+            'num_dialogues': len(x[0]),                               \
             'max_length': max_length                                \
            }
 
 class Iterator(SSIterator):
-    def __init__(self, triple_file, batch_size, **kwargs):
-        SSIterator.__init__(self, triple_file, batch_size,                   \
+    def __init__(self, dialogue_file, batch_size, **kwargs):
+        SSIterator.__init__(self, dialogue_file, batch_size,                   \
                             semantic_file=kwargs.pop('semantic_file', None), \
                             max_len=kwargs.pop('max_len', -1),               \
                             use_infinite_loop=kwargs.pop('use_infinite_loop', False))
@@ -138,7 +144,7 @@ class Iterator(SSIterator):
             number_of_batches = len(data)
             data = list(itertools.chain.from_iterable(data))
 
-            # Split list of words from the triple index
+            # Split list of words from the dialogue index
             data_x = []
             data_semantic = []
             for i in range(len(data)):
@@ -153,18 +159,45 @@ class Iterator(SSIterator):
                  
             for k in range(number_of_batches):
                 indices = order[k * batch_size:(k + 1) * batch_size]
-                batch = create_padded_batch(self.state, [x[indices]])
+                full_batch = create_padded_batch(self.state, [x[indices]])
 
-                # Add semantic information to batch; take care to fill with -1 (=n/a) whenever the batch is filled with empty triples
+                # Add semantic information to batch; take care to fill with -1 (=n/a) whenever the batch is filled with empty dialogues
                 if 'semantic_information_dim' in self.state:
-                    batch['x_semantic'] = - numpy.ones((self.state['bs'], self.state['semantic_information_dim'])).astype('int32')
-                    batch['x_semantic'][0:len(indices), :] = numpy.asarray(list(itertools.chain(x_semantic[indices]))).astype('int32')
+                    full_batch['x_semantic'] = - numpy.ones((self.state['bs'], self.state['semantic_information_dim'])).astype('int32')
+                    full_batch['x_semantic'][0:len(indices), :] = numpy.asarray(list(itertools.chain(x_semantic[indices]))).astype('int32')
                 else:
-                    batch['x_semantic'] = None
+                    full_batch['x_semantic'] = None
 
-                if batch:
-                    yield batch
-    
+                # Then split batches to have size self.state.max_grad_steps
+                splits = int(math.ceil(float(full_batch['max_length']) / float(self.state['max_grad_steps'])))
+                batches = []
+                for i in range(0, splits):
+                    batch = copy.deepcopy(full_batch)
+                    start_pos = self.state['max_grad_steps'] * i
+                    if start_pos > 0:
+                        start_pos = start_pos - 1
+
+                    end_pos = min(full_batch['max_length'], self.state['max_grad_steps'] * (i + 1))
+                    batch['x'] = full_batch['x'][start_pos:end_pos, :]
+                    batch['x_reversed'] = full_batch['x_reversed'][start_pos:end_pos, :]
+                    batch['x_mask'] = full_batch['x_mask'][start_pos:end_pos, :]
+
+
+                    batch['max_length'] = end_pos - start_pos
+                    batch['num_preds'] = numpy.sum(batch['x_mask']) - numpy.sum(batch['x_mask'][0,:])
+                    batch['num_dialogues'] = full_batch['num_dialogues'] / splits
+                    batch['x_reset'] = numpy.ones(self.state['bs'], dtype='float32')
+
+                    batches.append(batch)
+
+                if len(batches) > 0:
+                    batches[len(batches)-1]['x_reset'] = numpy.zeros(self.state['bs'], dtype='float32')
+
+                for batch in batches:
+                    if batch:
+                        yield batch
+
+
     def start(self):
         SSIterator.start(self)
         self.batch_iter = None
@@ -192,7 +225,7 @@ def get_train_iterator(state):
         semantic_valid_path = state['valid_semantic']
     
     train_data = Iterator(
-        state['train_triples'],
+        state['train_dialogues'],
         int(state['bs']),
         state=state,
         seed=state['seed'],
@@ -201,7 +234,7 @@ def get_train_iterator(state):
         max_len=state['seqlen']) 
      
     valid_data = Iterator(
-        state['valid_triples'],
+        state['valid_dialogues'],
         int(state['bs']),
         state=state,
         seed=state['seed'],
@@ -211,8 +244,8 @@ def get_train_iterator(state):
     return train_data, valid_data 
 
 def get_test_iterator(state):
-    assert 'test_triples' in state
-    test_path = state.get('test_triples')
+    assert 'test_dialogues' in state
+    test_path = state.get('test_dialogues')
     semantic_test_path = state.get('test_semantic', None)
 
     test_data = Iterator(

@@ -17,7 +17,7 @@ def prototype_state():
     state['end_sym_sentence'] = '</s>'
 
     # This is obsolete
-    #state['end_sym_triple'] = '</t>' 
+    #state['end_sym_dialogue'] = '</t>' 
     
     state['unk_sym'] = 0
     state['eot_sym'] = 3
@@ -27,21 +27,18 @@ def prototype_state():
     # Maxout requires qdim = 2x rankdim
     state['maxout_out'] = False
     state['deep_out'] = True
-    state['dcgm_encoder'] = False
 
     # ----- ACTIV ---- 
     state['sent_rec_activation'] = 'lambda x: T.tanh(x)'
-    state['triple_rec_activation'] = 'lambda x: T.tanh(x)'
+    state['dialogue_rec_activation'] = 'lambda x: T.tanh(x)'
     
     state['decoder_bias_type'] = 'all' # first, or selective 
 
     state['sent_step_type'] = 'gated'
-    state['triple_step_type'] = 'gated' 
+    state['dialogue_step_type'] = 'gated' 
 
     # if turned on two utterances encoders (one forward and one backward) will be used, otherwise only a forward utterance encoder is used
     state['bidirectional_utterance_encoder'] = False
-    # if turned on the L2 average pooling of the utterance encoders is used, otherwise the last state of the dialogue encoder(s) is used
-    state['encode_with_l2_pooling'] = False
     #  if turned on, the bidirectional utterance encoders parameters are set equal to each other at the end of each training step (by taking both of them to be equal to their mean)
     state['tie_encoder_parameters'] = False
 
@@ -50,7 +47,7 @@ def prototype_state():
     # ----- SIZES ----
     # Dimensionality of hidden layers
     state['qdim'] = 512
-    # Dimensionality of triple hidden layer 
+    # Dimensionality of dialogue hidden layer 
     state['sdim'] = 1000
     # Dimensionality of low-rank approximation
     state['rankdim'] = 256
@@ -105,57 +102,13 @@ def prototype_state():
 
     return state
 
-def dcgm_test():
-    state = prototype_state()
-    
-    # Fill your paths here! 
-    state['train_triples'] = "./tests/data/ttrain.triples.pkl"
-    state['test_triples'] = "./tests/data/ttest.triples.pkl"
-    state['valid_triples'] = "./tests/data/tvalid.triples.pkl"
-    state['dictionary'] = "./tests/data/ttrain.dict.pkl"
-    state['save_dir'] = "./tests/models/"
-    
-    # Handle bleu evaluation
-    state['bleu_evaluation'] = "./tests/bleu/bleu_evaluation"
-    state['bleu_context_length'] = 2
-
-    # Handle pretrained word embeddings. Using this requires rankdim=10
-    state['initialize_from_pretrained_word_embeddings'] = True
-    state['pretrained_word_embeddings_file'] = './tests/data/MT_WordEmb.pkl' 
-    state['fix_pretrained_word_embeddings'] = True
-    
-    # Validation frequency
-    state['valid_freq'] = 50
-    
-    # Varia
-    state['prefix'] = "dcgm_testmodel_" 
-    state['updater'] = 'adam'
-    
-    state['maxout_out'] = False
-    state['deep_out'] = True
-
-    state['dcgm_encoder'] = True 
-     
-    # If out of memory, modify this!
-    state['bs'] = 20
-    state['sort_k_batches'] = 1
-    state['use_nce'] = False
-    state['decoder_bias_type'] = 'all' #'selective' 
-    
-    state['qdim'] = 50 
-    # Dimensionality of triple hidden layer 
-    state['sdim'] = 100
-    # Dimensionality of low-rank approximation
-    state['rankdim'] = 10
-    return state
-
 def prototype_test():
     state = prototype_state()
     
     # Fill your paths here! 
-    state['train_triples'] = "./tests/data/ttrain.triples.pkl"
-    state['test_triples'] = "./tests/data/ttest.triples.pkl"
-    state['valid_triples'] = "./tests/data/tvalid.triples.pkl"
+    state['train_dialogues'] = "./tests/data/ttrain.triples.pkl"
+    state['test_dialogues'] = "./tests/data/ttest.triples.pkl"
+    state['valid_dialogues'] = "./tests/data/tvalid.triples.pkl"
     state['dictionary'] = "./tests/data/ttrain.dict.pkl"
     state['save_dir'] = "./tests/models/"
 
@@ -164,11 +117,10 @@ def prototype_test():
     state['test_semantic'] = "./tests/data/ttest.semantic.pkl"
     state['valid_semantic'] = "./tests/data/tvalid.semantic.pkl"
     state['semantic_information_dim'] = 2
-    state['bootstrap_from_semantic_information'] = False
-    state['semantic_information_start_weight'] = 0.95
-    state['semantic_information_decrease_rate'] = 0.001
-    state['add_semantic_information_to_utterance_decoder'] = False
 
+    # Gradients will be truncated after this amount of steps...
+    state['max_grad_steps'] = 5
+    #state['max_grad_steps'] = 50
     
     # Handle bleu evaluation
     state['bleu_evaluation'] = "./tests/bleu/bleu_evaluation"
@@ -190,12 +142,9 @@ def prototype_test():
     state['deep_out'] = True
 
     state['sent_step_type'] = 'gated'
-    state['triple_step_type'] = 'gated' 
+    state['dialogue_step_type'] = 'gated' 
     state['bidirectional_utterance_encoder'] = True 
-    state['encode_with_l2_pooling'] = True
-    state['tie_encoder_parameters'] = False
-
-    #state['direct_connection_between_encoders_and_decoder'] = False
+    state['direct_connection_between_encoders_and_decoder'] = False
 
     # If out of memory, modify this!
     state['bs'] = 20
@@ -204,7 +153,7 @@ def prototype_test():
     state['decoder_bias_type'] = 'all' #'selective' 
     
     state['qdim'] = 50 
-    # Dimensionality of triple hidden layer 
+    # Dimensionality of dialogue hidden layer 
     state['sdim'] = 100
     # Dimensionality of low-rank approximation
     state['rankdim'] = 10
@@ -214,31 +163,17 @@ def prototype_moviedic():
     state = prototype_state()
     
     # Fill your paths here! 
-    state['train_triples'] = "Data/Training.triples.pkl"
-    state['test_triples'] = "Data/Test.triples.pkl"
-    state['valid_triples'] = "Data/Validation.triples.pkl"
+    state['train_dialogues'] = "Data/Training.triples.pkl"
+    state['test_dialogues'] = "Data/Test.triples.pkl"
+    state['valid_dialogues'] = "Data/Validation.triples.pkl"
     state['dictionary'] = "Data/Training.dict.pkl" 
     state['save_dir'] = "Output" 
 
     # Paths for semantic information.
-    # When bootstrapping from semantic information, the cost function optimized is 
-    # a linear interpolation between the cross-entropy of genre prediction,
-    # and the cross-entropy of utterance decoder.
     state['train_semantic'] = "Data/Training.genres.pkl"
     state['test_semantic'] = "Data/Test.genres.pkl"
     state['valid_semantic'] = "Data/Validation.genres.pkl"
     state['semantic_information_dim'] = 16
-    state['bootstrap_from_semantic_information'] = True
-
-    # Sets the initial weight of the semantic bootstrapping.
-    # A weight of 0.95 means that the semantic bootstrapping will dominate in the beginning,
-    #  which is a reasonable way to regularize the model.
-    state['semantic_information_start_weight'] = 0.95
-
-    # This parameter controls the (linear) decay rate of the semantic information bootstrapping.
-    # Reasonable values for this parameter is between 0.0001-0.0008, because after seeing the 
-    #  entire moviescript corpus once or twice, the semantic bootstrapping will be zero.
-    state['semantic_information_decrease_rate'] = 0.0004 
 
     # Handle bleu evaluation
     state['bleu_evaluation'] = "Data/Mini_Validation_Shuffled_Dataset.txt"
@@ -268,7 +203,7 @@ def prototype_moviedic():
     state['seqlen'] = 160
 
     state['qdim'] = 600
-    # Dimensionality of triple hidden layer 
+    # Dimensionality of dialogue hidden layer 
     state['sdim'] = 1200
     # Dimensionality of low-rank approximation
     state['rankdim'] = 300
