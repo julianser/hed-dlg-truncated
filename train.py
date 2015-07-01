@@ -260,10 +260,11 @@ def main(args):
                 valid_extrema_setsize = min(state['track_extrema_samples_count'], valid_data_len)
                 valid_extrema_samples_to_print = min(state['print_extrema_samples_count'], valid_extrema_setsize)
 
+                max_stored_len = 160 # Maximum number of tokens to store for dialogues with highest and lowest validation errors
                 valid_lowest_costs = numpy.ones((valid_extrema_setsize,))*1000
-                valid_lowest_dialogues = numpy.ones((valid_extrema_setsize,state['seqlen']))*1000
+                valid_lowest_dialogues = numpy.ones((valid_extrema_setsize,max_stored_len))*1000
                 valid_highest_costs = numpy.ones((valid_extrema_setsize,))*(-1000)
-                valid_highest_dialogues = numpy.ones((valid_extrema_setsize,state['seqlen']))*(-1000)
+                valid_highest_dialogues = numpy.ones((valid_extrema_setsize,max_stored_len))*(-1000)
 
                 logger.debug("[VALIDATION START]") 
                 

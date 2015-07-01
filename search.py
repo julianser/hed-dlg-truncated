@@ -39,15 +39,16 @@ def sample_wrapper(sample_logic):
             if len(context_sentences) == 0:
                 joined_context = [sampler.model.eos_sym]
             else:
+                joined_context += [sampler.model.eos_sym]
                 for sentence in context_sentences:
                     sentence_ids = sampler.model.words_to_indices(sentence.split())
                     # Add sos and eos tokens
-                    joined_context += [sampler.model.sos_sym] + sentence_ids + [sampler.model.eos_sym]
+                    joined_context += sentence_ids + [sampler.model.eos_sym]
 
             samples, costs = sample_logic(sampler, joined_context, **kwargs) 
              
             # Convert back indices to list of words
-            converted_samples = map(lambda sample : sampler.model.indices_to_words(sample, exclude_start_end=kwargs.get('n_turns', 1) == 1), samples)
+            converted_samples = map(lambda sample : sampler.model.indices_to_words(sample, exclude_end_sym=kwargs.get('n_turns', 1) == 1), samples)
             # Join the list of words
             converted_samples = map(' '.join, converted_samples)
 
@@ -70,6 +71,7 @@ class Sampler(object):
         self.name = 'Sampler'
         self.model = model
         self.compiled = False
+        self.max_len = 160
 
     def compile(self):
         self.next_probs_predictor = self.model.build_next_probs_function()
@@ -175,7 +177,7 @@ class Sampler(object):
             indx_update_hs = [num for num, prev_word in enumerate(prev_words)
                                 if prev_word == self.model.eos_sym]
             if len(indx_update_hs):
-                encoder_states = self.compute_encoding(context[:, indx_update_hs], reversed_context[:, indx_update_hs], self.model.seqlen, semantic_info)
+                encoder_states = self.compute_encoding(context[:, indx_update_hs], reversed_context[:, indx_update_hs], self.max_len, semantic_info)
                 prev_hs[indx_update_hs] = encoder_states[1][-1]
             
             # ... done

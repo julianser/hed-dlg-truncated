@@ -58,17 +58,20 @@ def parse_args():
     return parser.parse_args()
 
 def compute_encodings(joined_contexts, model, model_compute_encoding, output_second_last_state = False):
-    context = numpy.zeros((model.seqlen, len(joined_contexts)), dtype='int32')
+    # HACK
+    # TODO Fix seqlen below
+    seqlen = 160
+    context = numpy.zeros((seqlen, len(joined_contexts)), dtype='int32')
     context_lengths = numpy.zeros(len(joined_contexts), dtype='int32')
     for idx in range(len(joined_contexts)):
         context_lengths[idx] = len(joined_contexts[idx])
-        if context_lengths[idx] < model.seqlen:
+        if context_lengths[idx] < seqlen:
             context[:context_lengths[idx], idx] = joined_contexts[idx]
         else:
             # If context is longer tha max context, truncate it and force the end-of-utterance token at the end
-            context[:model.seqlen, idx] = joined_contexts[idx][0:model.seqlen]
-            context[model.seqlen-1, idx] = model.eos_sym
-            context_lengths[idx] = model.seqlen
+            context[:seqlen, idx] = joined_contexts[idx][0:seqlen]
+            context[seqlen-1, idx] = model.eos_sym
+            context_lengths[idx] = seqlen
 
     n_samples = len(joined_contexts)
 
@@ -84,7 +87,7 @@ def compute_encodings(joined_contexts, model, model_compute_encoding, output_sec
     # Recompute hs only for those particular sentences
     # that met the end-of-sentence token
 
-    encoder_states = model_compute_encoding(context, reversed_context, model.seqlen)
+    encoder_states = model_compute_encoding(context, reversed_context, seqlen)
     hs = encoder_states[1]
 
     if output_second_last_state:
@@ -136,14 +139,15 @@ def main():
         if len(context_sentences) == 0:
             joined_context = [model.eos_sym]
         else:
+            joined_context += [model.eos_sym]
             for sentence in context_sentences:
                 sentence_ids = model.words_to_indices(sentence.split())
-                # Add sos and eos tokens
-                joined_context += [model.sos_sym] + sentence_ids + [model.eos_sym]
+                # Add eos tokens
+                joined_context += sentence_ids + [model.eos_sym]
 
         # HACK
-        for i in range(0, 50):
-            joined_context += [model.sos_sym] + [0] + [model.eos_sym]
+        #for i in range(0, 50):
+        #    joined_context += [0] + [model.eos_sym]
 
         joined_contexts.append(joined_context)
 

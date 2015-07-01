@@ -703,7 +703,7 @@ class UtteranceDecoder(EncoderDecoderBase):
         return output
 
 class DialogEncoderDecoder(Model):
-    def indices_to_words(self, seq, exclude_start_end=True):
+    def indices_to_words(self, seq, exclude_end_sym=True):
         """
         Converts a list of words to a list
         of word ids. Use unk_sym if a word is not
@@ -713,7 +713,7 @@ class DialogEncoderDecoder(Model):
             for word_index in seq:
                 if word_index > len(self.idx_to_str):
                     raise ValueError('Word index is too large for the model vocabulary!')
-                if not exclude_start_end or (word_index != self.eos_sym and word_index != self.sos_sym):
+                if not exclude_end_sym or (word_index != self.eos_sym):
                     yield self.idx_to_str[word_index]
         return list(convert())
 
@@ -884,9 +884,6 @@ class DialogEncoderDecoder(Model):
         if not 'direct_connection_between_encoders_and_decoder' in state:
             state['direct_connection_between_encoders_and_decoder'] = False
 
-        if not 'tie_encoder_parameters' in state:
-            state['tie_encoder_parameters'] = False
-
 
         self.state = state
         self.global_params = []
@@ -896,7 +893,6 @@ class DialogEncoderDecoder(Model):
 
         # Load dictionary
         raw_dict = cPickle.load(open(self.dictionary, 'r'))
-        
         # Probabilities for each term in the corpus
         self.noise_probs = [x[2] for x in sorted(raw_dict, key=operator.itemgetter(1))]
         self.noise_probs = numpy.array(self.noise_probs, dtype='float64')
@@ -913,9 +909,12 @@ class DialogEncoderDecoder(Model):
         self.word_freq = dict([(tok_id, freq) for _, tok_id, freq, _ in raw_dict])
         self.document_freq = dict([(tok_id, df) for _, tok_id, _, df in raw_dict])
 
-        if '</s>' not in self.str_to_idx \
-           or '<s>' not in self.str_to_idx:
-                raise Exception("Error, malformed dictionary!")
+        #if '</s>' not in self.str_to_idx \
+        #   or '</d>' not in self.str_to_idx:
+        #   raise Exception("Error, malformed dictionary!")
+
+        if '</s>' not in self.str_to_idx:
+           raise Exception("Error, malformed dictionary!")
          
         # Number of words in the dictionary 
         self.idim = len(self.str_to_idx)

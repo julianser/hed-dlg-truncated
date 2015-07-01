@@ -19,7 +19,14 @@ import copy
 logger = logging.getLogger(__name__)
 
 def create_padded_batch(state, x):
-    mx = state['seqlen']
+    # Find max length in batch
+    mx = 0
+    for idx in xrange(len(x[0])):
+        mx = max(mx, len(x[0][idx]))
+
+    # Take into account that sometimes we need to add the end-of-utterance symbol at the start
+    mx += 1
+
     n = state['bs'] 
     
     X = numpy.zeros((mx, n), dtype='int32')
@@ -28,16 +35,9 @@ def create_padded_batch(state, x):
     # Variable to store each utterance in reverse form (for bidirectional RNNs)
     X_reversed = numpy.zeros((mx, n), dtype='int32')
 
-    # Variables to store last utterance (for computing mutual information metric)
-    X_last_utterance = numpy.zeros((mx, n), dtype='int32')
-    X_last_utterance_reversed = numpy.zeros((mx, n), dtype='int32')
-    Xmask_last_utterance = numpy.zeros((mx, n), dtype='float32')
-    X_start_of_last_utterance = numpy.zeros((n), dtype='int32') 
-
     # Fill X and Xmask
     # Keep track of number of predictions and maximum dialogue length
     num_preds = 0
-    num_preds_last_utterance = 0
     max_length = 0
     for idx in xrange(len(x[0])):
         # Insert sequence idx in a column of matrix X
@@ -47,10 +47,13 @@ def create_padded_batch(state, x):
         if mx < dialogue_length: 
             continue
 
-        # Add eos symbol to beginning of dialogue to force model to generate first utterance too
-        assert x[0][idx][0] != state['eos_sym'] # check that the utterance does not begin with eos symbol
-        X[:dialogue_length+1, idx] = [state['eos_sym']] + x[0][idx][:dialogue_length]
-        dialogue_length = dialogue_length + 1
+        # Make sure end-of-utterance symbol is at beginning of dialogue.
+        # This will force model to generate first utterance too
+        if not x[0][idx][0] == state['eos_sym']:
+            X[:dialogue_length+1, idx] = [state['eos_sym']] + x[0][idx][:dialogue_length]
+            dialogue_length = dialogue_length + 1
+        else:
+            X[:dialogue_length, idx] = x[0][idx][:dialogue_length]
 
         max_length = max(max_length, dialogue_length)
 
@@ -68,47 +71,21 @@ def create_padded_batch(state, x):
         Xmask[0:dialogue_length, idx] = 1.
 
         # Reverse all utterances
-        sos_indices = numpy.where(X[:, idx] == state['sos_sym'])[0]
         eos_indices = numpy.where(X[:, idx] == state['eos_sym'])[0]
         X_reversed[:, idx] = X[:, idx]
         prev_eos_index = -1
         for eos_index in eos_indices:
-            X_reversed[(prev_eos_index+2):eos_index, idx] = (X_reversed[(prev_eos_index+2):eos_index, idx])[::-1]
+            X_reversed[(prev_eos_index+1):eos_index, idx] = (X_reversed[(prev_eos_index+1):eos_index, idx])[::-1]
             prev_eos_index = eos_index
             if prev_eos_index > dialogue_length:
                 break
 
-        # Find start of last utterance and store the utterance
-        assert (len(eos_indices) >= len(sos_indices))
-
-        if len(sos_indices) > 0: # Check that dialogue is not empty
-            start_of_last_utterance = sos_indices[-1]
-        else: # If it is empty, then we define last utterance to start at the beginning
-            start_of_last_utterance = 0
-
-        num_preds_last_utterance += dialogue_length - start_of_last_utterance
-
-        X_start_of_last_utterance[idx] = start_of_last_utterance
-        X_last_utterance[0:(dialogue_length-start_of_last_utterance), idx] = X[start_of_last_utterance:dialogue_length, idx]
-        Xmask_last_utterance[0:(dialogue_length-start_of_last_utterance), idx] = Xmask[start_of_last_utterance:dialogue_length, idx]
-
-
-        # Store also the last utterance in reverse
-        X_last_utterance_reversed[0:(dialogue_length-start_of_last_utterance), idx] = numpy.copy(X_last_utterance[0:(dialogue_length-start_of_last_utterance), idx])
-        X_last_utterance_reversed[1:(dialogue_length-start_of_last_utterance-1), idx] = (X_last_utterance_reversed[1:(dialogue_length-start_of_last_utterance-1), idx])[::-1]
-     
-    #assert num_preds == numpy.sum(Xmask)
     assert num_preds == numpy.sum(Xmask) - numpy.sum(Xmask[0, :])
     
     return {'x': X,                                                 \
             'x_reversed': X_reversed,                               \
             'x_mask': Xmask,                                        \
-            'x_last_utterance': X_last_utterance,                   \
-            'x_last_utterance_reversed': X_last_utterance_reversed, \
-            'x_mask_last_utterance': Xmask_last_utterance,          \
-            'x_start_of_last_utterance': X_start_of_last_utterance, \
             'num_preds': num_preds,                                 \
-            'num_preds_at_last_utterance': num_preds_last_utterance,\
             'num_dialogues': len(x[0]),                               \
             'max_length': max_length                                \
            }
@@ -185,7 +162,9 @@ class Iterator(SSIterator):
 
                     batch['max_length'] = end_pos - start_pos
                     batch['num_preds'] = numpy.sum(batch['x_mask']) - numpy.sum(batch['x_mask'][0,:])
-                    batch['num_dialogues'] = full_batch['num_dialogues'] / splits
+                    # For each batch we compute the number of dialogues as a fraction of the full batch,
+                    # that way, when we add them together, we get the total number of dialogues.
+                    batch['num_dialogues'] = float(full_batch['num_dialogues']) / float(splits)
                     batch['x_reset'] = numpy.ones(self.state['bs'], dtype='float32')
 
                     batches.append(batch)
@@ -231,7 +210,7 @@ def get_train_iterator(state):
         seed=state['seed'],
         semantic_file=semantic_train_path,
         use_infinite_loop=True,
-        max_len=state['seqlen']) 
+        max_len=-1) 
      
     valid_data = Iterator(
         state['valid_dialogues'],
@@ -240,7 +219,7 @@ def get_train_iterator(state):
         seed=state['seed'],
         semantic_file=semantic_valid_path,
         use_infinite_loop=False,
-        max_len=state['seqlen'])
+        max_len=-1)
     return train_data, valid_data 
 
 def get_test_iterator(state):
@@ -255,5 +234,5 @@ def get_test_iterator(state):
         seed=state['seed'],
         semantic_file=semantic_test_path,
         use_infinite_loop=False,
-        max_len=state['seqlen'])
+        max_len=-1)
     return test_data

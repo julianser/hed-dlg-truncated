@@ -13,17 +13,19 @@ def prototype_state():
     state['len_sample'] = 40
     
     # These are end-of-sequence marks
-    state['start_sym_sentence'] = '<s>'
     state['end_sym_sentence'] = '</s>'
 
-    # This is obsolete
-    #state['end_sym_dialogue'] = '</t>' 
-    
-    state['unk_sym'] = 0
-    state['eot_sym'] = 3
-    state['eos_sym'] = 2
-    state['sos_sym'] = 1
-    
+    # Special tokens need to be hardcoded, because model architecture may adapt depending on these
+    state['unk_sym'] = 0 # Unknown word token <unk>
+    state['eos_sym'] = 1 # end-of-utterance symbol </s>
+    state['eod_sym'] = 2 # end-of-dialogue symbol </d>
+    state['first_speaker_sym'] = 3 # first speaker symbol <first_speaker>
+    state['second_speaker_sym'] = 4 # second speaker symbol <second_speaker>
+    state['third_speaker_sym'] = 5 # third speaker symbol <third_speaker>
+    state['minor_speaker_sym'] = 6 # minor speaker symbol <minor_speaker>
+    state['voice_over'] = 7 # voice over symbol <voice_over>
+    state['off_screen'] = 8 # off screen symbol <off_screen>
+
     # Maxout requires qdim = 2x rankdim
     state['maxout_out'] = False
     state['deep_out'] = True
@@ -39,8 +41,6 @@ def prototype_state():
 
     # if turned on two utterances encoders (one forward and one backward) will be used, otherwise only a forward utterance encoder is used
     state['bidirectional_utterance_encoder'] = False
-    #  if turned on, the bidirectional utterance encoders parameters are set equal to each other at the end of each training step (by taking both of them to be equal to their mean)
-    state['tie_encoder_parameters'] = False
 
     state['direct_connection_between_encoders_and_decoder'] = False
     
@@ -68,8 +68,7 @@ def prototype_state():
     # ----- TRAINING METHOD -----
     # Choose optimization algorithm
     state['updater'] = 'adam'  
-    # Maximum sequence length / trim batches
-    state['seqlen'] = 80
+
     # Batch size
     state['bs'] = 80
     # Sort by length groups of  
@@ -106,9 +105,9 @@ def prototype_test():
     state = prototype_state()
     
     # Fill your paths here! 
-    state['train_dialogues'] = "./tests/data/ttrain.triples.pkl"
-    state['test_dialogues'] = "./tests/data/ttest.triples.pkl"
-    state['valid_dialogues'] = "./tests/data/tvalid.triples.pkl"
+    state['train_dialogues'] = "./tests/data/ttrain.dialogues.pkl"
+    state['test_dialogues'] = "./tests/data/ttest.dialogues.pkl"
+    state['valid_dialogues'] = "./tests/data/tvalid.dialogues.pkl"
     state['dictionary'] = "./tests/data/ttrain.dict.pkl"
     state['save_dir'] = "./tests/models/"
 
@@ -119,8 +118,7 @@ def prototype_test():
     state['semantic_information_dim'] = 2
 
     # Gradients will be truncated after this amount of steps...
-    state['max_grad_steps'] = 5
-    #state['max_grad_steps'] = 50
+    state['max_grad_steps'] = 10
     
     # Handle bleu evaluation
     state['bleu_evaluation'] = "./tests/bleu/bleu_evaluation"
@@ -159,30 +157,35 @@ def prototype_test():
     state['rankdim'] = 10
     return state
 
-def prototype_moviedic():
+def prototype_movies():
     state = prototype_state()
     
     # Fill your paths here! 
-    state['train_dialogues'] = "Data/Training.triples.pkl"
-    state['test_dialogues'] = "Data/Test.triples.pkl"
-    state['valid_dialogues'] = "Data/Validation.triples.pkl"
-    state['dictionary'] = "Data/Training.dict.pkl" 
+    state['train_dialogues'] = "Data/Training.dialogues.pkl"
+    state['test_dialogues'] = "Data/Test.dialogues.pkl"
+    state['valid_dialogues'] = "Data/Validation.dialogues.pkl"
+    state['dictionary'] = "Data/Dataset.dict.pkl" 
     state['save_dir'] = "Output" 
 
     # Paths for semantic information.
-    state['train_semantic'] = "Data/Training.genres.pkl"
-    state['test_semantic'] = "Data/Test.genres.pkl"
-    state['valid_semantic'] = "Data/Validation.genres.pkl"
-    state['semantic_information_dim'] = 16
+    # The genre labels are incorrect right now...
+    #state['train_semantic'] = "Data/Training.genres.pkl"
+    #state['test_semantic'] = "Data/Test.genres.pkl"
+    #state['valid_semantic'] = "Data/Validation.genres.pkl"
+    #state['semantic_information_dim'] = 16
+
+    # Gradients will be truncated after 80 steps. This seems like a fair start.
+    state['max_grad_steps'] = 80
 
     # Handle bleu evaluation
-    state['bleu_evaluation'] = "Data/Mini_Validation_Shuffled_Dataset.txt"
-    state['bleu_context_length'] = 2
+    #state['bleu_evaluation'] = "Data/Mini_Validation_Shuffled_Dataset.txt"
+    #state['bleu_context_length'] = 2
 
-    # Handle pretrained word embeddings. Using this requires rankdim=15
-    state['initialize_from_pretrained_word_embeddings'] = True
-    state['pretrained_word_embeddings_file'] = 'Data/Word2Vec_Emb.pkl' 
-    state['fix_pretrained_word_embeddings'] = True
+    # Handle pretrained word embeddings.
+    # These need to be recomputed if we want them for the 20K vocabulary.
+    #state['initialize_from_pretrained_word_embeddings'] = True
+    #state['pretrained_word_embeddings_file'] = 'Data/Word2Vec_Emb.pkl' 
+    #state['fix_pretrained_word_embeddings'] = True
     
     # Validation frequency
     state['valid_freq'] = 2500
@@ -191,7 +194,7 @@ def prototype_moviedic():
     state['prefix'] = "MovieScriptModel_" 
     state['updater'] = 'adam'
     
-    state['maxout_out'] = True
+    state['maxout_out'] = False
     state['deep_out'] = True
      
     # If out of memory, modify this!
@@ -199,14 +202,10 @@ def prototype_moviedic():
     state['use_nce'] = False
     state['decoder_bias_type'] = 'all' # Choose between 'first', 'all' and 'selective' 
 
-    # Increase sequence length to fit movie dialogues better
-    state['seqlen'] = 160
-
-    state['qdim'] = 600
+    state['qdim'] = 800
     # Dimensionality of dialogue hidden layer 
     state['sdim'] = 1200
     # Dimensionality of low-rank approximation
-    state['rankdim'] = 300
+    state['rankdim'] = 400
+
     return state
-
-

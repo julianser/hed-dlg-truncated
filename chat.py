@@ -104,7 +104,7 @@ def main():
        while len(utterances) > 2:
            utterances.popleft()
          
-       current_utterance = [ model.start_sym_sentence ] + var.split() + [ model.end_sym_sentence ]
+       current_utterance = [ model.end_sym_sentence ] + var.split() + [ model.end_sym_sentence ]
        utterances.append(current_utterance)
          
        # Sample a random reply. To spicy it up, we could pick the longest reply or the reply with the fewest placeholders...

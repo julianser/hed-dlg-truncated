@@ -2,12 +2,12 @@
 """
 Evaluation script.
 
-For paper submissions, this script should normally be run with flags --exclude-sos --plot-graphs, and both with and without the flag --exclude-stop-words.
+For paper submissions, this script should normally be run with flags --plot-graphs, and both with and without the flag --exclude-stop-words.
 
 
 Run example:
 
-THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32,allow_gc=True,scan.allow_gc=False,nvcc.flags=-use_fast_math python evaluate.py --exclude-sos --plot-graphs Output/1432724394.9_MovieScriptModel --document_ids Data/Test_Shuffled_Dataset_Labels.txt &> Test_Eval_Output.txt
+THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32,allow_gc=True,scan.allow_gc=False,nvcc.flags=-use_fast_math python evaluate.py --plot-graphs Output/1432724394.9_MovieScriptModel --document_ids Data/Test_Shuffled_Dataset_Labels.txt &> Test_Eval_Output.txt
 
 """
 
@@ -45,9 +45,6 @@ def parse_args():
     
     parser.add_argument("--test-path",
             type=str, help="File of test data")
-
-    parser.add_argument("--exclude-sos", action="store_true",
-                       help="Mask <s> from the cost computation")
 
     parser.add_argument("--plot-graphs", action="store_true",
                        help="Plots frequency graphs for word perplexity and pointwise mutual information")
@@ -160,10 +157,11 @@ def main():
     test_extrema_setsize = min(state['track_extrema_samples_count'], test_data_len)
     test_extrema_samples_to_print = min(state['print_extrema_samples_count'], test_extrema_setsize)
 
+    max_stored_len = 160 # Maximum number of tokens to store for dialogues with highest and lowest validation errors
     test_lowest_costs = numpy.ones((test_extrema_setsize,))*1000
-    test_lowest_triples = numpy.ones((test_extrema_setsize,state['seqlen']))*1000
+    test_lowest_triples = numpy.ones((test_extrema_setsize,max_stored_len))*1000
     test_highest_costs = numpy.ones((test_extrema_setsize,))*(-1000)
-    test_highest_triples = numpy.ones((test_extrema_setsize,state['seqlen']))*(-1000)
+    test_highest_triples = numpy.ones((test_extrema_setsize,max_stored_len))*(-1000)
 
     logger.debug("[TEST START]") 
 
@@ -181,10 +179,6 @@ def main():
         x_cost_mask = batch['x_mask']
         x_semantic = batch['x_semantic']
         x_semantic_nonempty_indices = numpy.where(x_semantic >= 0)
-
-        # Hack to get rid of start of sentence token.
-        if args.exclude_sos and model.sos_sym != -1:
-            x_cost_mask[x_data == model.sos_sym] = 0
 
         if args.exclude_stop_words:
             for word_index in stopwords_indices:
@@ -253,10 +247,6 @@ def main():
         x_data_last_utterance_reversed = batch['x_last_utterance_reversed']
         x_cost_mask_last_utterance = batch['x_mask_last_utterance']
         x_start_of_last_utterance = batch['x_start_of_last_utterance']
-
-        # Hack to get rid of start of sentence token.
-        if args.exclude_sos and model.sos_sym != -1:
-            x_cost_mask_last_utterance[x_data_last_utterance == model.sos_sym] = 0
 
         if args.exclude_stop_words:
             for word_index in stopwords_indices:
