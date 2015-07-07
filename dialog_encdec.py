@@ -418,8 +418,12 @@ class UtteranceDecoder(EncoderDecoderBase):
         self.Wd_hh = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='Wd_hh'))
         self.bd_hh = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='bd_hh'))
         self.Wd_in = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='Wd_in')) 
-        self.Wd_s_0 = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim), name='Wd_s_0'))
-        self.bd_s_0 = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='bd_s_0'))
+
+        # We only include the hidden state if its NOT a collapsed model. 
+        # In the collapsed model, we always initialize hidden state to zero.
+        if not self.collaps_to_standard_rnn:
+            self.Wd_s_0 = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim), name='Wd_s_0'))
+            self.bd_s_0 = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='bd_s_0'))
 
         if self.sent_step_type == "gated":
             self.Wd_in_r = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='Wd_in_r'))
@@ -524,6 +528,11 @@ class UtteranceDecoder(EncoderDecoderBase):
         return pos_scores + neg_scores
 
     def build_decoder(self, decoder_inp, x, xmask=None, y=None, y_neg=None, mode=EVALUATION, prev_state=None, step_num=None):
+
+        # If model collapses to standard RNN, then reset all input to decoder
+        if self.collaps_to_standard_rnn:
+            decoder_inp = decoder_inp * 0
+
         # Check parameter consistency
         if mode == UtteranceDecoder.EVALUATION or mode == UtteranceDecoder.NCE:
             assert y
@@ -624,8 +633,12 @@ class UtteranceDecoder(EncoderDecoderBase):
     def gated_step(self, xd_t, m_t, decoder_inp_t, hd_tm1): 
         if m_t.ndim >= 1:
             m_t = m_t.dimshuffle(0, 'x')
-         
-        hd_tm1 = (m_t) * hd_tm1 + (1 - m_t) * T.tanh(T.dot(decoder_inp_t, self.Wd_s_0) + self.bd_s_0) 
+
+        # If model collapses to standard RNN, then never reset decoder.
+        # Otherwise, reset the decoder at every utterance turn.
+        if not self.collaps_to_standard_rnn:
+            hd_tm1 = (m_t) * hd_tm1 + (1 - m_t) * T.tanh(T.dot(decoder_inp_t, self.Wd_s_0) + self.bd_s_0)
+
         # ^ iff x_{t - 1} = </s> (m_t = 0) then x_{t - 1} = 0
         # and hd_{t - 1} = tanh(W_s_0 decoder_inp_t + bd_s_0) else hd_{t - 1} is left unchanged (m_t = 1)
   
@@ -673,8 +686,12 @@ class UtteranceDecoder(EncoderDecoderBase):
         if m_t.ndim >= 1:
             m_t = m_t.dimshuffle(0, 'x')
         
-        # We already assume that xd are zeroed out
-        hd_tm1 = (m_t) * hd_tm1 + (1-m_t) * T.tanh(T.dot(decoder_inp_t, self.Wd_s_0) + self.bd_s_0)
+        # If model collapses to standard RNN, then never reset decoder.
+        # Otherwise, reset the decoder at every utterance turn.
+        if not self.collaps_to_standard_rnn:
+            # We already assume that xd are zeroed out
+            hd_tm1 = (m_t) * hd_tm1 + (1-m_t) * T.tanh(T.dot(decoder_inp_t, self.Wd_s_0) + self.bd_s_0)
+
         # ^ iff x_{t - 1} = </s> (m_t = 0) then x_{t-1} = 0
         # and hd_{t - 1} = 0 else hd_{t - 1} is left unchanged (m_t = 1)
 
@@ -884,6 +901,9 @@ class DialogEncoderDecoder(Model):
         if not 'direct_connection_between_encoders_and_decoder' in state:
             state['direct_connection_between_encoders_and_decoder'] = False
 
+        if not 'collaps_to_standard_rnn' in state:
+            state['collaps_to_standard_rnn'] = False
+
 
         self.state = state
         self.global_params = []
@@ -1058,12 +1078,16 @@ class DialogEncoderDecoder(Model):
             self.training_cost = self.contrastive_cost
 
         # Init params
-        if self.bidirectional_utterance_encoder:
-            self.params = self.global_params + self.utterance_encoder_forward.params + self.utterance_encoder_backward.params + self.dialog_encoder.params + self.utterance_decoder.params
-            assert len(set(self.params)) == (len(self.global_params) + len(self.utterance_encoder_forward.params) + len(self.utterance_encoder_backward.params) + len(self.dialog_encoder.params) + len(self.utterance_decoder.params))
+        if self.collaps_to_standard_rnn:
+                self.params = self.global_params + self.utterance_decoder.params
+                assert len(set(self.params)) == (len(self.global_params) + len(self.utterance_decoder.params))
         else:
-            self.params = self.global_params + self.utterance_encoder.params + self.dialog_encoder.params + self.utterance_decoder.params
-            assert len(set(self.params)) == (len(self.global_params) + len(self.utterance_encoder.params) + len(self.dialog_encoder.params) + len(self.utterance_decoder.params))
+            if self.bidirectional_utterance_encoder:
+                self.params = self.global_params + self.utterance_encoder_forward.params + self.utterance_encoder_backward.params + self.dialog_encoder.params + self.utterance_decoder.params
+                assert len(set(self.params)) == (len(self.global_params) + len(self.utterance_encoder_forward.params) + len(self.utterance_encoder_backward.params) + len(self.dialog_encoder.params) + len(self.utterance_decoder.params))
+            else:
+                self.params = self.global_params + self.utterance_encoder.params + self.dialog_encoder.params + self.utterance_decoder.params
+                assert len(set(self.params)) == (len(self.global_params) + len(self.utterance_encoder.params) + len(self.dialog_encoder.params) + len(self.utterance_decoder.params))
 
         self.updates = self.compute_updates(self.training_cost / training_x.shape[1], self.params)
 

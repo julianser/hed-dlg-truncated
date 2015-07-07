@@ -39,11 +39,19 @@ def prototype_state():
     state['sent_step_type'] = 'gated'
     state['dialogue_step_type'] = 'gated' 
 
-    # if turned on two utterances encoders (one forward and one backward) will be used, otherwise only a forward utterance encoder is used
+    # if on, two utterances encoders (one forward and one backward) will be used, otherwise only a forward utterance encoder is used
     state['bidirectional_utterance_encoder'] = False
 
+    # If on, there will be a direct connection between utterance encoder and utterane decoder RNNs
     state['direct_connection_between_encoders_and_decoder'] = False
-    
+
+    # If on, the model will collaps to a standard RNN:
+    # 1) The utterance+dialogue encoder input to the utterance decoder will be zero.
+    # 2) The utterance decoder will never be reset
+    # Note this model will always be initialized with a hidden state equal to zero
+    state['collaps_to_standard_rnn'] = False
+
+
     # ----- SIZES ----
     # Dimensionality of hidden layers
     state['qdim'] = 512
@@ -131,6 +139,8 @@ def prototype_test():
     
     # Validation frequency
     state['valid_freq'] = 50
+
+    state['collaps_to_standard_rnn'] = True
     
     # Variables
     state['prefix'] = "testmodel_" 
