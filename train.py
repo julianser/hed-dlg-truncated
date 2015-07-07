@@ -53,16 +53,16 @@ def init_timings():
         timings[m] = []
     return timings
 
-def save(model, timings):
+def save(model, timings, post_fix = ''):
     print "Saving the model..."
 
     # ignore keyboard interrupt while saving
     start = time.time()
     s = signal.signal(signal.SIGINT, signal.SIG_IGN)
     
-    model.save(model.state['save_dir'] + '/' + model.state['run_id'] + "_" + model.state['prefix'] + 'model.npz')
-    cPickle.dump(model.state, open(model.state['save_dir'] + '/' +  model.state['run_id'] + "_" + model.state['prefix'] + 'state.pkl', 'w'))
-    numpy.savez(model.state['save_dir'] + '/' + model.state['run_id'] + "_" + model.state['prefix'] + 'timing.npz', **timings)
+    model.save(model.state['save_dir'] + '/' + model.state['run_id'] + "_" + model.state['prefix'] + post_fix + 'model.npz')
+    cPickle.dump(model.state, open(model.state['save_dir'] + '/' +  model.state['run_id'] + "_" + model.state['prefix'] + post_fix + 'state.pkl', 'w'))
+    numpy.savez(model.state['save_dir'] + '/' + model.state['run_id'] + "_" + model.state['prefix'] + post_fix + 'timing.npz', **timings)
     signal.signal(signal.SIGINT, s)
     
     print "Model saved, took {}".format(time.time() - start)
@@ -84,8 +84,7 @@ def main(args):
      
     state = eval(args.prototype)() 
     timings = init_timings() 
-    
-    
+        
     if args.resume != "":
         logger.debug("Resuming %s" % args.resume)
         
@@ -317,6 +316,10 @@ def main(args):
                 elif valid_cost >= timings["valid_cost"][-1] * state['cost_threshold']:
                     patience -= 1
 
+                if args.save_every_valid_iteration:
+                    save(model, timings, '_' + str(step) + '_')
+
+
 
                 print "** valid cost (NLL) = %.4f, valid word-perplexity = %.4f, patience = %d" % (float(valid_cost), float(math.exp(valid_cost)), patience)
 
@@ -335,6 +338,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--resume", type=str, default="", help="Resume training from that state")
     parser.add_argument("--force_train_all_wordemb", action='store_true', help="If true, will force the model to train all word embeddings in the encoder. This switch can be used to fine-tune a model which was trained with fixed (pretrained)  encoder word embeddings.")
+    parser.add_argument("--save_every_valid_iteration", action='store_true', help="If true, will save a copy of the model at every validation iteration.")
 
     parser.add_argument("--prototype", type=str, help="Use the prototype", default='prototype_state')
 

@@ -194,12 +194,10 @@ def prototype_movies():
     state['prefix'] = "MovieScriptModel_" 
     state['updater'] = 'adam'
     
-    state['maxout_out'] = False
     state['deep_out'] = True
      
     # If out of memory, modify this!
-    state['bs'] = 40
-    state['use_nce'] = False
+    state['bs'] = 80
     state['decoder_bias_type'] = 'all' # Choose between 'first', 'all' and 'selective' 
 
     state['qdim'] = 800

@@ -13,7 +13,7 @@ import os
 import sys
 import logging
 import cPickle
-import itertools
+
 from collections import Counter
 
 logging.basicConfig(level=logging.INFO)
