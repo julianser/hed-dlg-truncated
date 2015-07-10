@@ -51,6 +51,9 @@ def prototype_state():
     # Note this model will always be initialized with a hidden state equal to zero
     state['collaps_to_standard_rnn'] = False
 
+    # If on, the utterance decoder will never be reset. 
+    # If off, the utterance decoder will be reset at the end of every utterance.
+    state['never_reset_decoder'] = False
 
     # ----- SIZES ----
     # Dimensionality of hidden layers
