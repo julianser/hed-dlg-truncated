@@ -31,6 +31,9 @@ def prototype_state():
     state['maxout_out'] = False
     state['deep_out'] = True
 
+    # If on, there will be an extra MLP between utterance and dialogue encoder
+    state['deep_dialogue_input'] = False
+
     # ----- ACTIV ---- 
     state['sent_rec_activation'] = 'lambda x: T.tanh(x)'
     state['dialogue_rec_activation'] = 'lambda x: T.tanh(x)'
@@ -157,6 +160,7 @@ def prototype_test():
     
     state['maxout_out'] = False
     state['deep_out'] = True
+    state['deep_dialogue_input'] = False
 
     state['sent_step_type'] = 'gated'
     state['dialogue_step_type'] = 'gated' 
