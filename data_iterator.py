@@ -139,7 +139,8 @@ class Iterator(SSIterator):
                 full_batch = create_padded_batch(self.state, [x[indices]])
 
                 # Add semantic information to batch; take care to fill with -1 (=n/a) whenever the batch is filled with empty dialogues
-                if 'semantic_information_dim' in self.state:
+#                if 'semantic_information_dim' in self.state:
+                if self.semantic_file:
                     full_batch['x_semantic'] = - numpy.ones((self.state['bs'], self.state['semantic_information_dim'])).astype('int32')
                     full_batch['x_semantic'][0:len(indices), :] = numpy.asarray(list(itertools.chain(x_semantic[indices]))).astype('int32')
                 else:
@@ -221,6 +222,18 @@ def get_train_iterator(state):
         use_infinite_loop=False,
         max_len=-1)
     return train_data, valid_data 
+
+def get_secondary_train_iterator(state):
+    secondary_train_data = Iterator(
+        state['secondary_train_dialogues'],
+        int(state['bs']),
+        state=state,
+        seed=state['seed'],
+        semantic_file=None,
+        use_infinite_loop=True,
+        max_len=-1) 
+
+    return secondary_train_data
 
 def get_test_iterator(state):
     assert 'test_dialogues' in state

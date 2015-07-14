@@ -25,6 +25,9 @@ from dialog_encdec import DialogEncoderDecoder
 from numpy_compat import argpartition
 from state import prototype_state
 
+import theano
+
+
 logger = logging.getLogger(__name__)
 
 class Timer(object):
@@ -37,20 +40,28 @@ class Timer(object):
     def finish(self):
         self.total += time.time() - self.start_time
 
-def sample(model, seqs=[[]], n_samples=1, beam_search=None, ignore_unk=False): 
-    if beam_search:
-        sentences = [] 
-         
-        seq = model.words_to_indices(seqs[0])
-        gen_ids, gen_costs = beam_search.search(seq, n_samples, ignore_unk=ignore_unk) 
-              
-        for i in range(len(gen_ids)):
-            sentence = model.indices_to_words(gen_ids[i])
-            sentences.append(sentence)
+def sample(model, seqs=[[]], n_samples=1, sampler=None, ignore_unk=False): 
+    if sampler:
+        context_samples, context_costs = sampler.sample(seqs,
+                                            n_samples=n_samples,
+                                            n_turns=1,
+                                            ignore_unk=ignore_unk,
+                                            verbose=True)
 
-        return sentences
+
+        return context_samples
     else:
         raise Exception("I don't know what to do")
+
+def remove_speaker_tokens(s):
+    s = s.replace('<first_speaker> ', '')
+    s = s.replace('<second_speaker> ', '')
+    s = s.replace('<third_speaker> ', '')
+    s = s.replace('<minor_speaker> ', '')
+    s = s.replace('<voice_over> ', '')
+    s = s.replace('<off_screen> ', '')
+
+    return s
 
 def parse_args():
     parser = argparse.ArgumentParser("Sample (with beam-search) from the session model")
@@ -89,11 +100,8 @@ def main():
     
     logger.info("This model uses " + model.decoder_bias_type + " bias type")
 
-    beam_search = None
-    sampler = None
-
-    beam_search = search.BeamSearch(model)
-    beam_search.compile()
+    #sampler = search.RandomSampler(model)
+    sampler = search.BeamSampler(model)
 
     # Start chat loop    
     utterances = collections.deque()
@@ -101,26 +109,30 @@ def main():
     while (True):
        var = raw_input("User - ")
 
-       while len(utterances) > 2:
+       # Increase number of utterances. We just set it to zero for simplicity so that model has no memory. 
+       # But it works fine if we increase this number
+       while len(utterances) > 0:
            utterances.popleft()
          
-       current_utterance = [ model.end_sym_sentence ] + var.split() + [ model.end_sym_sentence ]
+       current_utterance = [ model.end_sym_sentence ] + ['<first_speaker>'] + var.split() + [ model.end_sym_sentence ]
        utterances.append(current_utterance)
          
-       # Sample a random reply. To spicy it up, we could pick the longest reply or the reply with the fewest placeholders...
+       #TODO Sample a random reply. To spicy it up, we could pick the longest reply or the reply with the fewest placeholders...
        seqs = list(itertools.chain(*utterances))
 
+       #TODO Retrieve only replies which are generated for second speaker...
        sentences = sample(model, \
             seqs=[seqs], ignore_unk=args.ignore_unk, \
-            beam_search=beam_search, n_samples=5)
+            sampler=sampler, n_samples=5)
 
        if len(sentences) == 0:
            raise ValueError("Generation error, no sentences were produced!")
 
-       reply = " ".join(sentences[0]).encode('utf-8') 
-       print "AI - ", reply
-         
-       utterances.append(sentences[0])
+       utterances.append(sentences[0][0].split())
+
+       reply = sentences[0][0].encode('utf-8')
+       print "AI - ", remove_speaker_tokens(reply)
+
 
 if __name__ == "__main__":
     # Run with THEANO_FLAGS=mode=FAST_RUN,floatX=float32,allow_gc=True,scan.allow_gc=False,nvcc.flags=-use_fast_math python chat.py Model_Name

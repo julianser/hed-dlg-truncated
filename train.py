@@ -142,7 +142,15 @@ def main(args):
     train_data, \
     valid_data, = get_train_iterator(state)
     train_data.start()
-    
+
+    use_secondary_data = False
+    if ('secondary_train_dialogues' in state) and (len(state['secondary_train_dialogues']) > 0):
+        logger.debug("Load secondary data")
+        use_secondary_data = True
+        secondary_train_data = get_secondary_train_iterator(state)
+        secondary_train_data.start()
+        secondary_rng = numpy.random.RandomState(state['seed'])
+
     # Build the data structures for Bleu evaluation
     if 'bleu_evaluation' in state:
         bleu_eval_n_1 = BleuEvaluator(n=1)
@@ -176,8 +184,9 @@ def main(args):
     train_misclass = 0
     train_done = 0
     ex_done = 0
-    
+    is_end_of_batch = True
     start_validation = False
+    training_on_secondary_dataset = False
 
     while (step < state['loop_iters'] and
             (time.time() - start_time)/60. < state['time_stop'] and
@@ -192,7 +201,18 @@ def main(args):
             print "Sampled : {}".format(samples[0])
 
         # Training phase
-        batch = train_data.next() 
+
+        # If we are training on a primary and secondary dataset, sample at random from either of them
+        if is_end_of_batch:
+            if use_secondary_data and (secondary_rng.uniform() > state['secondary_proportion']):
+                training_on_secondary_dataset = True
+            else:
+                training_on_secondary_dataset = False
+
+        if training_on_secondary_dataset:
+            batch = secondary_train_data.next()
+        else:
+            batch = train_data.next() 
 
         # Train finished
         if not batch:
@@ -209,6 +229,11 @@ def main(args):
         x_semantic = batch['x_semantic']
         x_semantic = batch['x_semantic']
         x_reset = batch['x_reset']
+
+        is_end_of_batch = False
+        if numpy.sum(numpy.abs(x_reset)) < 1:
+            is_end_of_batch = True
+
         if state['use_nce']:
             y_neg = rng.choice(size=(10, max_length, x_data.shape[1]), a=model.idim, p=model.noise_probs).astype('int32')
             c = train_batch(x_data, x_data_reversed, y_neg, max_length, x_cost_mask, x_semantic, x_reset)
@@ -241,8 +266,7 @@ def main(args):
                 start_validation = True
 
         # Only start validation loop once it's time to validate and once all previous batches have been reset
-        if start_validation and\
-            numpy.sum(numpy.abs(x_reset)) < 1:
+        if start_validation and is_end_of_batch:
                 start_validation = False
                 valid_data.start()
                 valid_cost = 0

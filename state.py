@@ -27,6 +27,7 @@ def prototype_state():
     state['off_screen'] = 8 # off screen symbol <off_screen>
 
     # Maxout requires qdim = 2x rankdim
+    state['use_nce'] = False
     state['maxout_out'] = False
     state['deep_out'] = True
 
@@ -85,8 +86,6 @@ def prototype_state():
     # Sort by length groups of  
     state['sort_k_batches'] = 20
    
-    # Maximum number of iterations
-    state['max_iters'] = 10
     # Modify this in the prototype
     state['save_dir'] = './'
     
@@ -127,6 +126,13 @@ def prototype_test():
     state['test_semantic'] = "./tests/data/ttest.semantic.pkl"
     state['valid_semantic'] = "./tests/data/tvalid.semantic.pkl"
     state['semantic_information_dim'] = 2
+
+    # If secondary_train_dialogues is specified the model will simultaneously be trained on a second dataset.
+    # Each batch (document) will be chosen from the secondary dataset with probability secondary_proportion.
+    #state['secondary_train_dialogues'] = "./tests/data/ttrain.dialogues.pkl"
+    #state['secondary_proportion'] = 0.5
+
+
 
     # Gradients will be truncated after this amount of steps...
     state['max_grad_steps'] = 10
@@ -180,6 +186,11 @@ def prototype_movies():
     state['dictionary'] = "Data/Dataset.dict.pkl" 
     state['save_dir'] = "Output" 
 
+    # If secondary_train_dialogues is specified the model will simultaneously be trained on a second dataset.
+    # Each batch (document) will be chosen from the secondary dataset with probability secondary_proportion.
+    state['secondary_train_dialogues'] = "Data/OpenSubtitles.dialogues.pkl"
+    state['secondary_proportion'] = 0.5
+
     # Paths for semantic information.
     # The genre labels are incorrect right now...
     #state['train_semantic'] = "Data/Training.genres.pkl"
@@ -188,7 +199,7 @@ def prototype_movies():
     #state['semantic_information_dim'] = 16
 
     # Gradients will be truncated after 80 steps. This seems like a fair start.
-    state['max_grad_steps'] = 80
+    state['max_grad_steps'] = 160
 
     # Handle bleu evaluation
     #state['bleu_evaluation'] = "Data/Mini_Validation_Shuffled_Dataset.txt"
@@ -210,7 +221,7 @@ def prototype_movies():
     state['deep_out'] = True
      
     # If out of memory, modify this!
-    state['bs'] = 80
+    state['bs'] = 40
     state['decoder_bias_type'] = 'all' # Choose between 'first', 'all' and 'selective' 
 
     state['qdim'] = 800
