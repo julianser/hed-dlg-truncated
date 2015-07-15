@@ -220,19 +220,23 @@ class DialogEncoder(EncoderDecoderBase):
             # Without the bidirectional flag, the dialog encoder only gets input
             # from the forward utterance encoder, which has dim self.qdim
             input_dim = self.qdim
+
+        transformed_input_dim = input_dim
+        if self.deep_dialogue_input:
+            self.Ws_deep_input = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, input_dim, self.sdim), name='Ws_deep_input'+self.name))
+            self.bs_deep_input = add_to_params(self.params, theano.shared(value=np.zeros((self.sdim,), dtype='float32'), name='bs_deep_input'+self.name))
+            transformed_input_dim = self.sdim
+
         
-        self.Ws_in = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, input_dim, self.sdim), name='Ws_in'+self.name))
+        self.Ws_in = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, transformed_input_dim, self.sdim), name='Ws_in'+self.name))
         self.Ws_hh = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.sdim, self.sdim), name='Ws_hh'+self.name))
         self.bs_hh = add_to_params(self.params, theano.shared(value=np.zeros((self.sdim,), dtype='float32'), name='bs_hh'+self.name)) 
          
 
-        if self.deep_dialogue_input:
-            self.Ws_deep_input = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, input_dim, self.sdim), name='Ws_deep_input'+self.name))
-            self.bs_deep_input = add_to_params(self.params, theano.shared(value=np.zeros((self.sdim,), dtype='float32'), name='bs_deep_input'+self.name))
 
         if self.dialogue_step_type == "gated":
-            self.Ws_in_r = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, input_dim, self.sdim), name='Ws_in_r'+self.name))
-            self.Ws_in_z = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, input_dim, self.sdim), name='Ws_in_z'+self.name))
+            self.Ws_in_r = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, transformed_input_dim, self.sdim), name='Ws_in_r'+self.name))
+            self.Ws_in_z = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, transformed_input_dim, self.sdim), name='Ws_in_z'+self.name))
             self.Ws_hh_r = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.sdim, self.sdim), name='Ws_hh_r'+self.name))
             self.Ws_hh_z = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.sdim, self.sdim), name='Ws_hh_z'+self.name))
             self.bs_z = add_to_params(self.params, theano.shared(value=np.zeros((self.sdim,), dtype='float32'), name='bs_z'+self.name))
@@ -334,12 +338,23 @@ class DialogDummyEncoder(EncoderDecoderBase):
     # This dialogue encoder behaves like a DialogEncoder with the identity function.
     # At the end of each utterance, the input from the utterance encoder(s) is transferred
     # to its hidden state, which can then be transfered to the decoder.
+
+    def init_params(self):
+        """ Context weights """
+        if self.deep_direct_connection:
+            self.Ws_dummy_deep_input = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.inp_dim, self.inp_dim), name='Ws_dummy_deep_input'+self.name))
+            self.bs_dummy_deep_input = add_to_params(self.params, theano.shared(value=np.zeros((self.inp_dim,), dtype='float32'), name='bs_dummy_deep_input'+self.name))
+
+
     def plain_dialogue_step(self, h_t, m_t, hs_tm1):
         if m_t.ndim >= 1:
             m_t = m_t.dimshuffle(0, 'x')
 
-        hs_tilde = h_t
-        hs_t = (m_t) * hs_tm1 + (1 - m_t) * hs_tilde 
+        transformed_h_t = h_t
+        if self.deep_direct_connection:
+            transformed_h_t = self.dialogue_rec_activation(T.dot(h_t, self.Ws_dummy_deep_input) + self.bs_dummy_deep_input)
+
+        hs_t = (m_t) * hs_tm1 + (1 - m_t) * transformed_h_t 
         return hs_t
 
     def build_encoder(self, h, x, xmask=None, prev_state=None, **kwargs):
@@ -394,9 +409,13 @@ class DialogDummyEncoder(EncoderDecoderBase):
 
         return hs 
 
-    def __init__(self, state, rng, parent, inp_dim):
+    def __init__(self, state, rng, parent, inp_dim, name=''):
         self.inp_dim = inp_dim
+        self.name = name
         EncoderDecoderBase.__init__(self, state, rng, parent)
+        self.init_params()
+
+
 
 class UtteranceDecoder(EncoderDecoderBase):
     NCE = 0
@@ -919,12 +938,20 @@ class DialogEncoderDecoder(Model):
         if not 'direct_connection_between_encoders_and_decoder' in state:
             state['direct_connection_between_encoders_and_decoder'] = False
 
+        if not 'deep_direct_connection' in state:
+            state['deep_direct_connection'] = False
+
+        if state['direct_connection_between_encoders_and_decoder']:
+            assert(state['deep_direct_connection'] == False)
+
         if not 'collaps_to_standard_rnn' in state:
             state['collaps_to_standard_rnn'] = False
 
         if not 'never_reset_decoder' in state:
             state['never_reset_decoder'] = False
 
+        if not 'deep_dialogue_input' in state:
+            state['deep_dialogue_input'] = True
 
         self.state = state
         self.global_params = []

@@ -49,6 +49,9 @@ def prototype_state():
     # If on, there will be a direct connection between utterance encoder and utterane decoder RNNs
     state['direct_connection_between_encoders_and_decoder'] = False
 
+    # If on, there will be an extra MLP between utterance encoder and utterance decoder
+    state['deep_direct_connection'] = False
+
     # If on, the model will collaps to a standard RNN:
     # 1) The utterance+dialogue encoder input to the utterance decoder will be zero.
     # 2) The utterance decoder will never be reset
