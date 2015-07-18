@@ -68,10 +68,6 @@ class UtteranceEncoder(EncoderDecoderBase):
         return self.W_emb[x]
 
     def plain_sent_step(self, x_t, m_t, *args):
-        do_pool = False
-        if len(args) > 1:
-            do_pool = True
-
         args = iter(args)
         h_tm1 = next(args)
 
@@ -81,25 +77,10 @@ class UtteranceEncoder(EncoderDecoderBase):
         hr_tm1 = m_t * h_tm1
         h_t = self.sent_rec_activation(T.dot(x_t, self.W_in) + T.dot(hr_tm1, self.W_hh) + self.b_hh)
 
-        if do_pool:
-            # perform pooling with a moving average
-            h_tm1_pooled = next(args)
-            pool_len = next(args)
-
-            new_pool_len = pool_len * m_t + 1
-            h_t_pooled = ((new_pool_len - 1) * h_tm1_pooled + h_t**2) / new_pool_len
-
-            # return state and pooled state
-            return [h_t, h_t_pooled, new_pool_len]
-        else:
-            # Return hidden state only
-            return [h_t]
+        # Return hidden state only
+        return [h_t]
 
     def gated_sent_step(self, x_t, m_t, *args):
-        do_pool = False
-        if len(args) >= 3:
-            do_pool = True
-
         args = iter(args)
         h_tm1 = next(args)
 
@@ -113,19 +94,8 @@ class UtteranceEncoder(EncoderDecoderBase):
         h_tilde = self.sent_rec_activation(T.dot(x_t, self.W_in) + T.dot(r_t * hr_tm1, self.W_hh) + self.b_hh)
         h_t = (np.float32(1.0) - z_t) * hr_tm1 + z_t * h_tilde
         
-        if do_pool:
-            # perform pooling with a moving average
-            h_tm1_pooled = next(args)
-            pool_len = next(args)
-
-            new_pool_len = pool_len * m_t + 1
-            h_t_pooled = ((new_pool_len - 1) * h_tm1_pooled + h_t**2) / new_pool_len
-
-            # return both reset state and non-reset state
-            return [h_t, h_t_pooled, new_pool_len, r_t, z_t, h_tilde]
-        else:
-            # return both reset state and non-reset state
-            return [h_t, r_t, z_t, h_tilde]
+        # return both reset state and non-reset state
+        return [h_t, r_t, z_t, h_tilde]
 
     def build_encoder(self, x, xmask=None, prev_state=None, **kwargs):
         one_step = False
@@ -922,12 +892,12 @@ class DialogEncoderDecoder(Model):
         return self.encoder_fn
 
     def __init__(self, state):
-        Model.__init__(self)    
+        Model.__init__(self)
 
         # Compatibility towards older models
         if 'bootstrap_from_semantic_information' in state:
             assert state['bootstrap_from_semantic_information'] == False # We don't support semantic info right now...
-              
+
 
         if not 'bidirectional_utterance_encoder' in state:
             state['bidirectional_utterance_encoder'] = False
@@ -941,7 +911,7 @@ class DialogEncoderDecoder(Model):
         if not 'deep_direct_connection' in state:
             state['deep_direct_connection'] = False
 
-        if state['direct_connection_between_encoders_and_decoder']:
+        if not state['direct_connection_between_encoders_and_decoder']:
             assert(state['deep_direct_connection'] == False)
 
         if not 'collaps_to_standard_rnn' in state:
