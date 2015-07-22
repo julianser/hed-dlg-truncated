@@ -15,7 +15,7 @@ python convert-text2dict.py <training_file> --cutoff <vocabulary_size> Training
 python convert-text2dict.py <validation_file> --dict=Training.dict.pkl Validation
 python convert-text2dict.py <test_file> --dict=Training.dict.pkl <vocabulary_size> Test
 
-where <training_file> is the training file, and <vocabulary_size> is the number of tokens that you want to train on (all other tokens will be converted to <unk> symbols).
+where training_file is the training file, and vocabulary_size is the number of tokens that you want to train on (all other tokens, but the most frequent vocabulary_size tokens, will be converted to &lt;unk&gt; symbols).
 
 NOTE: The script automatically adds the following special tokens specific to movie scripts:
 - end-of-utterance: </s>
@@ -26,6 +26,7 @@ NOTE: The script automatically adds the following special tokens specific to mov
 - minor speaker: <minor_speaker>
 - voice over: <voice_over>
 - off screen: <off_screen>
+- pause: <pause>
 
 If these do not exist in your dataset, you can safely ignore these, but remember that your vocabulary will still contain these.
 

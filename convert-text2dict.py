@@ -61,6 +61,7 @@ if args.dict != "":
     assert '<minor_speaker>' in vocab
     assert '<voice_over>' in vocab
     assert '<off_screen>' in vocab
+    assert '<pause>' in vocab
 
 else:
     word_counter = Counter()
@@ -86,10 +87,10 @@ else:
     # Add special tokens to the vocabulary
     vocab = {'<unk>': 0, '</s>': 1, '</d>': 2, '<first_speaker>': 3, \
             '<second_speaker>': 4, '<third_speaker>': 5, '<minor_speaker>': 6, \
-            '<voice_over>': 7, '<off_screen>': 8}
+            '<voice_over>': 7, '<off_screen>': 8, '<pause>': 9}
 
     # Add other tokens to vocabulary in the order of their frequency
-    i = 9
+    i = 10
     for (word, count) in vocab_count:
         if not word in vocab:
             vocab[word] = i
@@ -145,5 +146,5 @@ if args.dict == "":
 
 logger.info("Number of unknowns %d" % unknowns)
 logger.info("Number of terms %d" % num_terms)
-logger.info("Mean dialogue length %f" % float(sum(map(len, binarized_corpus))/len(binarized_corpus)))
+logger.info("Mean document length %f" % float(sum(map(len, binarized_corpus))/len(binarized_corpus)))
 logger.info("Writing training %d dialogues (%d left out)" % (len(binarized_corpus), line + 1 - len(binarized_corpus)))

@@ -12,7 +12,7 @@ Usage example for MT embeddings:
 
 Usage example for Word2Vec embeddings:
 
-    python convert-wordemb-dict2emb-matrix.py Data/Training.dict.pkl WordEmb/GoogleNews-vectors-negative300.bin --apply_spelling_corrections --emb_dim 300 OutMat
+    python convert-wordemb-dict2emb-matrix.py Data/Training.dict.pkl WordEmb/GoogleNews-vectors-negative300.bin --apply_spelling_corrections --emb_dim 300 Word2Vec_WordEmb
 
 @author Iulian Vlad Serban
 """
@@ -65,7 +65,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('covert-wordemb-dict2emb-matrix')
 
 # These are the words, which won't be looked upn in the pretrained word embedding dictionary
-non_word_tokens = ['<s>', '</s>', '<t>', '</t>', '<unk>', '<person>', '<continued_utterance>', '.', ',', '``', '\'\'', '[', ']', '`', '-', '--', '\'']
+non_word_tokens = ['<s>', '</s>', '<t>', '</t>', '<unk>', '.', ',', '``', '\'\'', '[', ']', '`', '-', '--', '\'', '<pause>', '<first_speaker>', '<second_speaker>', '<third_speaker>', '<minor_speaker>', '<voice_over>', '<off_screen>', '</d>']
+
 print 'The following non-word tokens will not be extracted from the pretrained embeddings: ', non_word_tokens
 
 import argparse
@@ -143,17 +144,12 @@ word_freq_left_out = []
 total_freq_left_out = 0
 total_freq = 0
 
-total_freq_person = 0
 total_freq_non_word = 0
 
 # Go through every word in the model dictionary and add the corresponding word embedding to W_emb_raw
 for key in str_to_idx.iterkeys():
     index = str_to_idx[key]
     total_freq = total_freq + word_freq[index]
-
-    # It's interesting to just compute the frequency of <person> in the training corpus
-    if '<person>' in key:
-        total_freq_person = total_freq_person + word_freq[index]
 
     if key in non_word_tokens:
         unique_words_left_out.append(key)
@@ -163,6 +159,11 @@ for key in str_to_idx.iterkeys():
         total_freq_non_word = total_freq_non_word + word_freq[index]
     elif key in embedding_dict: # Otherwise, check if word is in word embedding dict
         W_emb_raw[index, :] = embedding_dict[key]
+        unique_word_indices_found.append(index)
+        words_found = words_found + 1
+    elif len(key) > 3 and (key[-1] == '.' and key[0:len(key)-1] in embedding_dict): # Remove punctuation mark
+        print 'Assuming ' + str(key) + ' -> ' + str(key[0:len(key)-1])
+        W_emb_raw[index, :] = embedding_dict[key[0:len(key)-1]]
         unique_word_indices_found.append(index)
         words_found = words_found + 1
     elif key.title() in embedding_dict: # Check if word with capital first letter exists in word embedding dict
@@ -220,10 +221,6 @@ logger.info("Unique words left out: %d" % unique_words_missing)
 logger.info("Terms in corpus: %d" % total_freq)
 logger.info("Terms left out: %d" % total_freq_left_out)
 logger.info("Percentage terms left out: %f" % (float(total_freq_left_out)/float(total_freq)))
-
-
-logger.info("<person> terms in corpus: %d" % total_freq_person)
-logger.info("Percentage <person> of terms in corpus: %f" % (float(total_freq_person)/float(total_freq)))
 
 logger.info("non-word terms in corpus: %d" % total_freq_non_word)
 logger.info("Percentage non-word terms in corpus: %f" % (float(total_freq_non_word)/float(total_freq)))

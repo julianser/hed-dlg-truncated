@@ -23,8 +23,19 @@ def prototype_state():
     state['second_speaker_sym'] = 4 # second speaker symbol <second_speaker>
     state['third_speaker_sym'] = 5 # third speaker symbol <third_speaker>
     state['minor_speaker_sym'] = 6 # minor speaker symbol <minor_speaker>
-    state['voice_over'] = 7 # voice over symbol <voice_over>
-    state['off_screen'] = 8 # off screen symbol <off_screen>
+    state['voice_over_sym'] = 7 # voice over symbol <voice_over>
+    state['off_screen_sym'] = 8 # off screen symbol <off_screen>
+    state['pause_sym'] = 9 # pause symbol <pause>
+
+    # Training examples will be split into subsequences of size max_grad_steps each.
+    # Gradients will be computed on the subsequence, and the last hidden state of all RNNs will
+    # be used to initialize the hidden state of the RNNs in the next subsequence.
+    state['max_grad_steps'] = 80
+    # If this flag is on, the hidden state between RNNs in subsequences is always initialized to zero
+    state['reset_hidden_states_between_subsequences'] = False
+
+
+
 
     # Maxout requires qdim = 2x rankdim
     state['use_nce'] = False
@@ -138,9 +149,6 @@ def prototype_test():
     #state['secondary_train_dialogues'] = "./tests/data/ttrain.dialogues.pkl"
     #state['secondary_proportion'] = 0.5
 
-
-
-    # Gradients will be truncated after this amount of steps...
     state['max_grad_steps'] = 10
     
     # Handle bleu evaluation
@@ -195,8 +203,8 @@ def prototype_movies():
 
     # If secondary_train_dialogues is specified the model will simultaneously be trained on a second dataset.
     # Each batch (document) will be chosen from the secondary dataset with probability secondary_proportion.
-    state['secondary_train_dialogues'] = "Data/OpenSubtitles.dialogues.pkl"
-    state['secondary_proportion'] = 0.5
+    #state['secondary_train_dialogues'] = "Data/OpenSubtitles.dialogues.pkl"
+    #state['secondary_proportion'] = 0.5
 
     # Paths for semantic information.
     # The genre labels are incorrect right now...
@@ -206,7 +214,7 @@ def prototype_movies():
     #state['semantic_information_dim'] = 16
 
     # Gradients will be truncated after 80 steps. This seems like a fair start.
-    state['max_grad_steps'] = 160
+    state['max_grad_steps'] = 80
 
     # Handle bleu evaluation
     #state['bleu_evaluation'] = "Data/Mini_Validation_Shuffled_Dataset.txt"

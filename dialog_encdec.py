@@ -923,6 +923,9 @@ class DialogEncoderDecoder(Model):
         if not 'deep_dialogue_input' in state:
             state['deep_dialogue_input'] = True
 
+        if not 'reset_hidden_states_between_subsequences' in state:
+            state['reset_hidden_states_between_subsequences'] = False
+
         self.state = state
         self.global_params = []
 
@@ -1109,16 +1112,22 @@ class DialogEncoderDecoder(Model):
 
         self.updates = self.compute_updates(self.training_cost / training_x.shape[1], self.params)
 
-        # Truncate gradients properly by brining forward previous states
+        # Truncate gradients properly by bringing forward previous states
+        # First, create reset mask
+        x_reset = self.x_reset_mask.dimshuffle(0, 'x')
+        # if flag 'reset_hidden_states_between_subsequences' is on, then
+        # always reset
+        if self.reset_hidden_states_between_subsequences:
+            x_reset = 0
+
+        # Next, compute updates using reset mask (this depends on the number of RNNs in the model)
         self.state_updates = []
         if self.bidirectional_utterance_encoder:
-            x_reset = self.x_reset_mask.dimshuffle(0, 'x')
             self.state_updates.append((self.ph_fwd, x_reset * res_forward[-1]))
             self.state_updates.append((self.ph_bck, x_reset * res_backward[-1]))
             self.state_updates.append((self.phs, x_reset * self.hs[-1]))
             self.state_updates.append((self.phd, x_reset * self.hd[-1]))
         else:
-            x_reset = self.x_reset_mask.dimshuffle(0, 'x')
             self.state_updates.append((self.ph, x_reset * self.h[-1]))
             self.state_updates.append((self.phs, x_reset * self.hs[-1]))
             self.state_updates.append((self.phd, x_reset * self.hd[-1]))
