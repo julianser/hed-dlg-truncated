@@ -1,13 +1,13 @@
 # hed-dlg-truncated
 Hierarchical Encoder Decoder RNN (HRED) with Truncated Backpropagation Through Time (Truncated BPTT) for Dialog Modeling. 
 
-The truncated computation is based on the trick of splitting each document into shorter sequences (e.g. 80 tokens) and then computing gradients for each sequence separately, but where the hidden state of the RNNs have been initialized from the preceding sequences (i.e. the hidden states have been forward propagated through all previous states).
+The truncated computation is based on the trick of splitting each document into shorter sequences (e.g. 80 tokens) and then computing gradients for each sequence separately, but where the hidden state of the RNNs have been initialized from the preceding sequences (i.e. the hidden states have been forward propagated through the previous states).
 
 # Creating A Dataset
 
 The script convert-text2dict.py can be used to generate model datasets based on text files with dialogues. It only requires that the document contains end-of-utterance tokens &lt;/s&gt; which are used to construct the model graph, since the utterance encoder is only connected to the dialogue encoder at the end of each utterance.
 
-Prepare your dataset as a text file for with one document (e.g. movie script or subtitle) per line. The dialogues are assumed to be tokenized. If you have a validation and tests sets, they must satisfy the same requirements.
+Prepare your dataset as a text file for with one document (e.g. movie script or subtitle) per line. The dialogues are assumed to be tokenized. If you have validation and test sets, they must satisfy the same requirements.
 
 Once you're ready, you can create the model dataset files by running:
 
@@ -15,7 +15,7 @@ python convert-text2dict.py &lt;training_file&gt; --cutoff &lt;vocabulary_size&g
 python convert-text2dict.py &lt;validation_file&gt; --dict=Training.dict.pkl Validation
 python convert-text2dict.py &lt;test_file&gt; --dict=Training.dict.pkl &lt;vocabulary_size&gt; Test
 
-where training_file is the training file, and vocabulary_size is the number of tokens that you want to train on (all other tokens, but the most frequent vocabulary_size tokens, will be converted to &lt;unk&gt; symbols).
+where &lt;training_file&gt;, &lt;validation_file&gt; and &lt;test_file&gt; are the training, validation and test files, and &lt;vocabulary_size&gt; is the number of tokens that you want to train on (all other tokens, but the most frequent &lt;vocabulary_size&gt; tokens, will be converted to &lt;unk&gt; symbols).
 
 NOTE: The script automatically adds the following special tokens specific to movie scripts:
 - end-of-utterance: &lt;/s&gt;
