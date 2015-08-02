@@ -20,7 +20,7 @@ import numpy
 import collections
 import signal
 import math
-
+import gc
 
 import matplotlib
 matplotlib.use('Agg')
@@ -45,7 +45,8 @@ logger = logging.getLogger(__name__)
 RUN_ID = str(time.time())
 
 ### Additional measures can be set here
-measures = ["train_cost", "train_misclass", "valid_cost", "valid_misclass", "valid_emi", "valid_bleu_n_1", "valid_bleu_n_2", "valid_bleu_n_3", "valid_bleu_n_4", 'valid_jaccard', 'valid_recall_at_1', 'valid_recall_at_5', 'valid_mrr_at_5', 'tfidf_cs_at_1', 'tfidf_cs_at_5']
+measures = ["train_cost", "train_misclass", "train_variational_cost", "train_posterior_mean_variance", "valid_cost", "valid_misclass", "valid_posterior_mean_variance", "valid_variational_cost", "valid_emi", "valid_bleu_n_1", "valid_bleu_n_2", "valid_bleu_n_3", "valid_bleu_n_4", 'valid_jaccard', 'valid_recall_at_1', 'valid_recall_at_5', 'valid_mrr_at_5', 'tfidf_cs_at_1', 'tfidf_cs_at_5']
+
 
 def init_timings():
     timings = {}
@@ -98,6 +99,10 @@ def main(args):
             timings = dict(numpy.load(open(timings_file, 'r')))
             for x, y in timings.items():
                 timings[x] = list(y)
+
+            # Increment seed to make sure we get newly shuffled batches when training on large datasets
+            state['seed'] = state['seed'] + 10
+
         else:
             raise Exception("Cannot resume, cannot find files!")
 
@@ -181,12 +186,16 @@ def main(args):
     start_time = time.time()
      
     train_cost = 0
+    train_variational_cost = 0
+    train_posterior_mean_variance = 0
     train_misclass = 0
     train_done = 0
     ex_done = 0
     is_end_of_batch = True
     start_validation = False
     training_on_secondary_dataset = False
+
+    batch = None
 
     while (step < state['loop_iters'] and
             (time.time() - start_time)/60. < state['time_stop'] and
@@ -212,7 +221,7 @@ def main(args):
         if training_on_secondary_dataset:
             batch = secondary_train_data.next()
         else:
-            batch = train_data.next() 
+            batch = train_data.next()
 
         # Train finished
         if not batch:
@@ -229,6 +238,7 @@ def main(args):
         x_semantic = batch['x_semantic']
         x_semantic = batch['x_semantic']
         x_reset = batch['x_reset']
+        ran_cost_utterance = batch['ran_var_constutterance']
 
         is_end_of_batch = False
         if numpy.sum(numpy.abs(x_reset)) < 1:
@@ -236,15 +246,18 @@ def main(args):
 
         if state['use_nce']:
             y_neg = rng.choice(size=(10, max_length, x_data.shape[1]), a=model.idim, p=model.noise_probs).astype('int32')
-            c = train_batch(x_data, x_data_reversed, y_neg, max_length, x_cost_mask, x_semantic, x_reset)
+            c, variational_cost, posterior_mean_variance = train_batch(x_data, x_data_reversed, y_neg, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance)
         else:
-            c = train_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, x_reset)
+            c, variational_cost, posterior_mean_variance = train_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance)
 
         if numpy.isinf(c) or numpy.isnan(c):
             logger.warn("Got NaN cost .. skipping")
+            gc.collect()
             continue
 
         train_cost += c
+        train_variational_cost += variational_cost
+        train_posterior_mean_variance += posterior_mean_variance
 
         train_done += batch['num_preds']
 
@@ -252,14 +265,16 @@ def main(args):
         if step % state['train_freq'] == 0:
             elapsed = this_time - start_time
             h, m, s = ConvertTimedelta(this_time - start_time)
-            print ".. %.2d:%.2d:%.2d %4d mb # %d bs %d maxl %d acc_cost = %.4f acc_word_perplexity = %.4f acc_mean_word_error = %.4f " % (h, m, s,\
+            print ".. %.2d:%.2d:%.2d %4d mb # %d bs %d maxl %d acc_cost = %.4f acc_word_perplexity = %.4f acc_mean_word_error = %.4f acc_mean_variational_cost = %.4f acc_mean_posterior_variance = %.4f" % (h, m, s,\
                              state['time_stop'] - (time.time() - start_time)/60.,\
                              step, \
                              batch['x'].shape[1], \
                              batch['max_length'], \
                              float(train_cost/train_done), \
                              math.exp(float(train_cost/train_done)), \
-                             float(train_misclass)/float(train_done))
+                             float(train_misclass)/float(train_done), \
+                             float(train_variational_cost/train_done), \
+                             float(train_posterior_mean_variance/train_done))
 
         if valid_data is not None and\
             step % state['valid_freq'] == 0 and step > 1:
@@ -270,6 +285,9 @@ def main(args):
                 start_validation = False
                 valid_data.start()
                 valid_cost = 0
+                valid_variational_cost = 0
+                valid_posterior_mean_variance = 0
+
                 valid_wordpreds_done = 0
                 valid_dialogues_done = 0
 
@@ -289,10 +307,11 @@ def main(args):
                 valid_highest_costs = numpy.ones((valid_extrema_setsize,))*(-1000)
                 valid_highest_dialogues = numpy.ones((valid_extrema_setsize,max_stored_len))*(-1000)
 
-                logger.debug("[VALIDATION START]") 
-                
+                logger.debug("[VALIDATION START]")
+
                 while True:
                     batch = valid_data.next()
+
                     # Train finished
                     if not batch:
                         break
@@ -307,8 +326,9 @@ def main(args):
                     x_semantic_nonempty_indices = numpy.where(x_semantic >= 0)
 
                     x_reset = batch['x_reset']
+                    ran_cost_utterance = batch['ran_var_constutterance']
 
-                    c, c_list = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, x_reset)
+                    c, c_list, variational_cost, posterior_mean_variance = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance)
 
                     # Rehape into matrix, where rows are validation samples and columns are tokens
                     # Note that we use max_length-1 because we don't get a cost for the first token
@@ -324,6 +344,9 @@ def main(args):
                         continue
                     
                     valid_cost += c
+                    valid_variational_cost += variational_cost
+                    valid_posterior_mean_variance += posterior_mean_variance
+
 
                     valid_wordpreds_done += batch['num_preds']
                     valid_dialogues_done += batch['num_dialogues']
@@ -332,6 +355,8 @@ def main(args):
                 logger.debug("[VALIDATION END]") 
                  
                 valid_cost /= valid_wordpreds_done
+                valid_variational_cost /= valid_wordpreds_done
+                valid_posterior_mean_variance /= valid_wordpreds_done
 
                 if len(timings["valid_cost"]) == 0 or valid_cost < numpy.min(timings["valid_cost"]):
                     patience = state['patience']
@@ -345,10 +370,14 @@ def main(args):
 
 
 
-                print "** valid cost (NLL) = %.4f, valid word-perplexity = %.4f, patience = %d" % (float(valid_cost), float(math.exp(valid_cost)), patience)
+                print "** valid cost (NLL) = %.4f, valid word-perplexity = %.4f, valid variational cost = %.4f, valid mean posterior variance = %.4f, patience = %d" % (float(valid_cost), float(math.exp(valid_cost)), float(valid_variational_cost), float(valid_posterior_mean_variance), patience)
 
                 timings["train_cost"].append(train_cost/train_done)
+                timings["train_variational_cost"].append(train_variational_cost/train_done)
+                timings["train_posterior_mean_variance"].append(train_posterior_mean_variance/train_done)
                 timings["valid_cost"].append(valid_cost)
+                timings["valid_variational_cost"].append(valid_variational_cost)
+                timings["valid_posterior_mean_variance"].append(valid_posterior_mean_variance)
 
                 # Reset train cost, train misclass and train done
                 train_cost = 0

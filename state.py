@@ -81,6 +81,13 @@ def prototype_state():
     # Dimensionality of low-rank approximation
     state['rankdim'] = 256
 
+    # ----- VARIATIONAL LEARNING -----
+    state['add_latent_gaussian_per_utterance'] = True
+    state['latent_gaussian_per_utterance_dim'] = 10
+    state['scale_latent_variable_variances'] = 0.01
+    state['min_latent_variable_variances'] = 0.001
+    state['max_latent_variable_variances'] = 1
+
     # Threshold to clip the gradient
     state['cutoff'] = 1.
     state['lr'] = 0.0001
@@ -93,7 +100,7 @@ def prototype_state():
     state['initialize_from_pretrained_word_embeddings'] = False
     state['pretrained_word_embeddings_file'] = ''
     state['fix_pretrained_word_embeddings'] = False
-     
+
     # ----- TRAINING METHOD -----
     # Choose optimization algorithm
     state['updater'] = 'adam'  
@@ -149,7 +156,7 @@ def prototype_test():
     #state['secondary_train_dialogues'] = "./tests/data/ttrain.dialogues.pkl"
     #state['secondary_proportion'] = 0.5
 
-    state['max_grad_steps'] = 10
+    state['max_grad_steps'] = 5
     
     # Handle bleu evaluation
     state['bleu_evaluation'] = "./tests/bleu/bleu_evaluation"
@@ -179,14 +186,14 @@ def prototype_test():
     state['direct_connection_between_encoders_and_decoder'] = False
 
     # If out of memory, modify this!
-    state['bs'] = 20
+    state['bs'] = 5
     state['sort_k_batches'] = 1
     state['use_nce'] = False
     state['decoder_bias_type'] = 'all' #'selective' 
     
-    state['qdim'] = 50 
+    state['qdim'] = 5 #0 
     # Dimensionality of dialogue hidden layer 
-    state['sdim'] = 100
+    state['sdim'] = 10 # 0
     # Dimensionality of low-rank approximation
     state['rankdim'] = 10
     return state
@@ -229,20 +236,23 @@ def prototype_movies():
     # Validation frequency
     state['valid_freq'] = 2500
     
-    # Varia
     state['prefix'] = "MovieScriptModel_" 
     state['updater'] = 'adam'
     
+    # Model architecture
+    state['bidirectional_utterance_encoder'] = True
+    state['add_latent_gaussian_per_utterance'] = False # True
+    state['latent_gaussian_per_utterance_dim'] = 20
+    state['deep_dialogue_input'] = True
     state['deep_out'] = True
-     
-    # If out of memory, modify this!
-    state['bs'] = 40
+ 
+    state['bs'] = 80 # If out of memory, modify this!
     state['decoder_bias_type'] = 'all' # Choose between 'first', 'all' and 'selective' 
 
-    state['qdim'] = 800
+    state['qdim'] = 600
     # Dimensionality of dialogue hidden layer 
-    state['sdim'] = 1200
+    state['sdim'] = 300
     # Dimensionality of low-rank approximation
-    state['rankdim'] = 400
+    state['rankdim'] = 300
 
     return state

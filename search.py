@@ -181,7 +181,7 @@ class Sampler(object):
                 prev_hs[indx_update_hs] = encoder_states[1][-1]
             
             # ... done
-            next_probs, new_hd = self.next_probs_predictor(prev_hs, prev_words, prev_hd)
+            next_probs, new_hd = self.next_probs_predictor(prev_hs, prev_hd, prev_words, context)
 
             assert next_probs.shape[1] == self.model.idim
             

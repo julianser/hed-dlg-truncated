@@ -1,6 +1,7 @@
 import numpy as np
 import theano
 import theano.tensor as T
+
 import sys, getopt
 import logging
 
@@ -18,7 +19,68 @@ import copy
 
 logger = logging.getLogger(__name__)
 
-def create_padded_batch(state, x):
+
+def add_random_variables_to_batch(state, rng, batch, prev_batch = None):
+    """
+    This is a helper function, which adds the Normal random variables in a batch.
+    We do it this way, because we want to avoid Theano's random sampling both to speed up and to avoid
+    known Theano issues with sampling inside scan loops.
+
+    Currently only the random variable 'ran_var_constutterance. is sampled from a standard Normal distribution, 
+    which remains constant during each utterance (i.e. between end-of-utterance tokens).
+    """
+
+    # If none return none...
+    if not batch:
+        return batch
+
+    # Variable to store random vector sampled at the beginning of each utterance
+    Ran_Var_ConstUtterance = numpy.zeros((batch['x'].shape[0], batch['x'].shape[1], state['latent_gaussian_per_utterance_dim']), dtype='float32')
+
+    # Go through each sample, find end-of-utterance indices and sample random variables
+    for idx in xrange(batch['x'].shape[1]):
+        # Find end-of-utterance indices
+        eos_indices = numpy.where(batch['x'][:, idx] == state['eos_sym'])[0].tolist()
+
+        # Make sure we also sample at the beginning of the utterance, and that we stop appropriately at the end
+        if len(eos_indices) > 0:
+            if not eos_indices[0] == 0:
+                eos_indices = [0] + eos_indices
+            if not eos_indices[-1] == batch['x'].shape[0]:
+                eos_indices = eos_indices + [batch['x'].shape[0]]
+        else:
+            eos_indices = [0] + [batch['x'].shape[0]-1]
+
+        # Sample random variables using NumPy
+        ran_vectors = rng.normal(loc=0, scale=1, size=(len(eos_indices), state['latent_gaussian_per_utterance_dim']))
+        for i in range(len(eos_indices)-1):
+            for j in range(eos_indices[i], eos_indices[i+1]):
+                Ran_Var_ConstUtterance[j, idx, :] = ran_vectors[i, :]
+
+    # If a previous batch is given, and the last utterance in the previous batch
+    # overlaps with the first utterance in the current batch, then we need to copy over 
+    # the random variables from the last utterance in the last batch to remain consistent.
+    if prev_batch:
+        if ('x_reset' in prev_batch) and (not numpy.sum(numpy.abs(prev_batch['x_reset'])) < 1) \
+          and ('ran_var_constutterance' in prev_batch):
+
+            for idx in xrange(batch['x'].shape[1]):
+                prev_ran_vector = prev_batch['ran_var_constutterance'][-1,idx,:]
+                if len(eos_indices) > 1:
+                    for j in range(0, eos_indices[1]):
+                        Ran_Var_ConstUtterance[j, idx, :] = prev_ran_vector
+                else:
+                    for j in range(0, batch['x'].shape[0]):
+                        Ran_Var_ConstUtterance[j, idx, :] = prev_ran_vector
+
+
+    # Add new random variables to batch and return the new batch
+    batch['ran_var_constutterance'] = Ran_Var_ConstUtterance
+
+    return batch
+
+
+def create_padded_batch(state, rng, x):
     # Find max length in batch
     mx = 0
     for idx in xrange(len(x[0])):
@@ -34,6 +96,9 @@ def create_padded_batch(state, x):
 
     # Variable to store each utterance in reverse form (for bidirectional RNNs)
     X_reversed = numpy.zeros((mx, n), dtype='int32')
+
+    # Variable to store random vector sampled at the beginning of each utterance
+    #Ran_Var_ConstUtterance = numpy.zeros((mx, n, state['latent_gaussian_per_utterance_dim']), dtype='float32')
 
     # Fill X and Xmask
     # Keep track of number of predictions and maximum dialogue length
@@ -80,15 +145,25 @@ def create_padded_batch(state, x):
             if prev_eos_index > dialogue_length:
                 break
 
+        # Sample random variables (we want to avoid Theano's random sampling to speed up the process...)
+        #ran_vectors = rng.normal(loc=0, scale=1, size=(len(eos_indices), state['latent_gaussian_per_utterance_dim']))
+        #for i in range(len(eos_indices)-1):
+        #    for j in range(eos_indices[i], eos_indices[i+1]):
+        #        Ran_Var_ConstUtterance[j, idx, :] = ran_vectors[i, :]
+
+        #print 'X[:dialogue_length, idx]', X[:dialogue_length, idx]
+        #print 'Ran_Var_ConstUtterance[j, :, idx]', Ran_Var_ConstUtterance[:, :, idx]
+
     assert num_preds == numpy.sum(Xmask) - numpy.sum(Xmask[0, :])
     
     return {'x': X,                                                 \
             'x_reversed': X_reversed,                               \
             'x_mask': Xmask,                                        \
             'num_preds': num_preds,                                 \
-            'num_dialogues': len(x[0]),                               \
+            'num_dialogues': len(x[0]),                             \
             'max_length': max_length                                \
            }
+            #'ran_var_constutterance': Ran_Var_ConstUtterance,       \
 
 class Iterator(SSIterator):
     def __init__(self, dialogue_file, batch_size, **kwargs):
@@ -104,6 +179,10 @@ class Iterator(SSIterator):
         self.state = kwargs.pop('state', None)
         # ---------------- 
         self.batch_iter = None
+        self.rng = numpy.random.RandomState(self.state['seed'])
+
+        # Keep track of previous batch, because this is needed to specify random variables
+        self.prev_batch = None
 
     def get_homogenous_batch_iter(self, batch_size = -1):
         while True:
@@ -136,7 +215,7 @@ class Iterator(SSIterator):
                  
             for k in range(number_of_batches):
                 indices = order[k * batch_size:(k + 1) * batch_size]
-                full_batch = create_padded_batch(self.state, [x[indices]])
+                full_batch = create_padded_batch(self.state, self.rng, [x[indices]])
 
                 # Add semantic information to batch; take care to fill with -1 (=n/a) whenever the batch is filled with empty dialogues
 #                if 'semantic_information_dim' in self.state:
@@ -146,23 +225,28 @@ class Iterator(SSIterator):
                 else:
                     full_batch['x_semantic'] = None
 
-                # Then split batches to have size self.state.max_grad_steps
+                # Then split batches to have size 'max_grad_steps'
                 splits = int(math.ceil(float(full_batch['max_length']) / float(self.state['max_grad_steps'])))
                 batches = []
                 for i in range(0, splits):
                     batch = copy.deepcopy(full_batch)
+
+                    # Retrieve start and end position (index) of current mini-batch
                     start_pos = self.state['max_grad_steps'] * i
                     if start_pos > 0:
                         start_pos = start_pos - 1
 
-                    end_pos = min(full_batch['max_length'], self.state['max_grad_steps'] * (i + 1))
+                    if i < splits - 1:
+                        end_pos = self.state['max_grad_steps'] * (i + 1) - 1
+                    else:
+                        end_pos = full_batch['max_length'] + 1
+
                     batch['x'] = full_batch['x'][start_pos:end_pos, :]
                     batch['x_reversed'] = full_batch['x_reversed'][start_pos:end_pos, :]
                     batch['x_mask'] = full_batch['x_mask'][start_pos:end_pos, :]
-
-
                     batch['max_length'] = end_pos - start_pos
                     batch['num_preds'] = numpy.sum(batch['x_mask']) - numpy.sum(batch['x_mask'][0,:])
+
                     # For each batch we compute the number of dialogues as a fraction of the full batch,
                     # that way, when we add them together, we get the total number of dialogues.
                     batch['num_dialogues'] = float(full_batch['num_dialogues']) / float(splits)
@@ -187,10 +271,21 @@ class Iterator(SSIterator):
         We can specify a batch size,
         independent of the object initialization. 
         """
+        # If there are no more batches in list, try to generate new batches
         if not self.batch_iter:
             self.batch_iter = self.get_homogenous_batch_iter(batch_size)
+
         try:
+            # Retrieve next batch
             batch = next(self.batch_iter)
+
+            # Add Normal random variables to batch. 
+            # We add them separetly for each batch to save memory.
+            # If we instead had added them to the full batch before splitting into mini-batches,
+            # the random variables would take up several GBs for big batches and long documents.
+            batch = add_random_variables_to_batch(self.state, self.rng, batch, self.prev_batch)
+            # Keep track of last batch
+            self.prev_batch = batch
         except StopIteration:
             return None
         return batch
