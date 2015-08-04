@@ -57,14 +57,12 @@ def add_random_variables_to_batch(state, rng, batch, prev_batch = None):
             for j in range(eos_indices[i], eos_indices[i+1]):
                 Ran_Var_ConstUtterance[j, idx, :] = ran_vectors[i, :]
 
-    # If a previous batch is given, and the last utterance in the previous batch
-    # overlaps with the first utterance in the current batch, then we need to copy over 
-    # the random variables from the last utterance in the last batch to remain consistent.
-    if prev_batch:
-        if ('x_reset' in prev_batch) and (not numpy.sum(numpy.abs(prev_batch['x_reset'])) < 1) \
-          and ('ran_var_constutterance' in prev_batch):
-
-            for idx in xrange(batch['x'].shape[1]):
+        # If a previous batch is given, and the last utterance in the previous batch
+        # overlaps with the first utterance in the current batch, then we need to copy over 
+        # the random variables from the last utterance in the last batch to remain consistent.
+        if prev_batch:
+            if ('x_reset' in prev_batch) and (not numpy.sum(numpy.abs(prev_batch['x_reset'])) < 1) \
+              and ('ran_var_constutterance' in prev_batch):
                 prev_ran_vector = prev_batch['ran_var_constutterance'][-1,idx,:]
                 if len(eos_indices) > 1:
                     for j in range(0, eos_indices[1]):
@@ -236,10 +234,9 @@ class Iterator(SSIterator):
                     if start_pos > 0:
                         start_pos = start_pos - 1
 
-                    if i < splits - 1:
-                        end_pos = self.state['max_grad_steps'] * (i + 1) - 1
-                    else:
-                        end_pos = full_batch['max_length'] + 1
+                    # We need to copy over the last token from each batch onto the next, 
+                    # because this is what the model expects.
+                    end_pos = min(full_batch['max_length'], self.state['max_grad_steps'] * (i + 1))
 
                     batch['x'] = full_batch['x'][start_pos:end_pos, :]
                     batch['x_reversed'] = full_batch['x_reversed'][start_pos:end_pos, :]

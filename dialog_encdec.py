@@ -826,6 +826,83 @@ class DialogLevelLatentEncoder(EncoderDecoderBase):
         self.name = name
         self.init_params()
 
+class DialogLevelReverser(EncoderDecoderBase):
+    def plain_dialogue_step(self, h_t, m_t, hs_tm1):
+        if m_t.ndim >= 1:
+            m_t = m_t.dimshuffle(0, 'x')
+
+        hs_t = (m_t) * hs_tm1 + (1 - m_t) * h_t
+        return hs_t
+
+    def build_encoder(self, h, x, xmask=None, **kwargs):
+        one_step = False
+        if len(kwargs):
+            one_step = True
+
+        # if x.ndim == 2 then 
+        # x = (n_steps, batch_size)
+        if x.ndim == 2:
+            batch_size = x.shape[1]
+        # else x = (word_1, word_2, word_3, ...)
+        # or x = (last_word_1, last_word_2, last_word_3, ..)
+        # in this case batch_size is 
+        else:
+            batch_size = 1
+        
+        # if it is not one_step then we initialize everything to 0  
+        if not one_step:
+            hs_0 = h[-1]
+
+        # in sampling mode (i.e. one step) we require 
+        else:
+            # in this case x.ndim != 2
+            assert x.ndim != 2
+            assert 'prev_hs' in kwargs
+            hs_0 = kwargs['prev_hs']
+
+        if xmask == None:
+            xmask = T.neq(x, self.eos_sym)       
+
+        f_hier = self.plain_dialogue_step
+        o_hier_info = [hs_0]
+        
+        # All hierarchical sentence
+        # The hs sequence is based on the original mask
+        #if not one_step:
+        #    _res,  _ = theano.scan(f_hier,\
+        #                       sequences=[h, xmask],\
+        #                       outputs_info=o_hier_info, \
+        #                       go_backwards=True)
+
+        h_reversed = h[::-1]
+        xmask_reversed = xmask[::-1]
+        if not one_step:
+            _res,  _ = theano.scan(f_hier,\
+                               sequences=[h_reversed, xmask_reversed],\
+                               outputs_info=o_hier_info)
+
+
+
+
+        # Just one step further
+        else:
+            _res = f_hier(h, xmask, hs_0)
+
+        if isinstance(_res, list) or isinstance(_res, tuple):
+            hs = _res[0][::-1]
+        else:
+            hs = _res[::-1]
+
+        final_hs = hs[1:(self.parent.x_max_length-1)]
+        final_hs = T.concatenate([final_hs, h[-1].dimshuffle('x', 0, 1)], axis=0)
+
+        return final_hs
+
+
+    def __init__(self, state, input_dim, rng, parent):
+        EncoderDecoderBase.__init__(self, state, rng, parent)
+        self.input_dim = input_dim
+
 class DialogEncoderDecoder(Model):
     def indices_to_words(self, seq, exclude_end_sym=True):
         """
@@ -918,7 +995,7 @@ class DialogEncoderDecoder(Model):
                                             outputs=[self.training_cost, self.variational_cost, self.latent_utterance_variable_approx_posterior_mean_var],
                                             updates=self.updates + self.state_updates, 
                                             on_unused_input='warn', 
-                                            name="train_fn") 
+                                            name="train_fn")
 
         return self.nce_fn
 
@@ -1195,14 +1272,30 @@ class DialogEncoderDecoder(Model):
             else:
                 posterior_input_size = self.sdim + self.qdim
 
+            # Retrieve hidden state at the end of next utterance from the utterance encoders
+            # (or at the end of the batch, if there are no end-of-token symbols at the end of the batch)
+            if self.bidirectional_utterance_encoder:
+                self.utterance_encoder_reverser = DialogLevelReverser(self.state, self.qdim, self.rng, self)
+            else:
+                self.utterance_encoder_reverser = DialogLevelReverser(self.state, self.qdim*2, self.rng, self)
+
+            self.h_future = self.utterance_encoder_reverser.build_encoder( \
+                                     self.h, \
+                                     training_x, \
+                                     xmask=training_hs_mask)
+
+
+
+
+
             self.latent_utterance_variable_approx_posterior_encoder = DialogLevelLatentEncoder(self.state, posterior_input_size, self.latent_gaussian_per_utterance_dim, self.rng, self, 'latent_utterance_approx_posterior')
             self.h_mean_pooled = T.repeat(T.sum(self.h * (1 - training_hs_mask.dimshuffle(0,1,'x')),axis=0).dimshuffle('x', 0, 1), (self.x_max_length-1), axis=0)
 
-            # .dimshuffle('x', 0, 1)
+            #self.hs_and_h_mean_pooled = T.concatenate([self.hs, self.h_mean_pooled], axis=2)
+            self.hs_and_h_future = T.concatenate([self.hs, self.h_future], axis=2)
 
-            self.hs_and_h_mean_pooled = T.concatenate([self.hs, self.h_mean_pooled], axis=2)
             _posterior_out = self.latent_utterance_variable_approx_posterior_encoder.build_encoder( \
-                                     self.hs_and_h_mean_pooled, \
+                                     self.hs_and_h_future, \
                                      training_x, \
                                      xmask=training_hs_mask, \
                                      prev_state=self.platent_utterance_variable_approx_posterior)
@@ -1228,7 +1321,8 @@ class DialogEncoderDecoder(Model):
                    - T.sum(T.log(self.latent_utterance_variable_approx_posterior_var), axis=2)          \
                   ) / 2
 
-            self.variational_cost = T.sum(T.sum(kl_divergences_between_prior_and_posterior, axis=0) / T.maximum(1, T.sum(T.eq(training_x, self.eos_sym), axis=0)))
+            # TODO weight by number of random variables instead of this sum (e.g. just remove #)...
+            self.variational_cost = T.sum(kl_divergences_between_prior_and_posterior.flatten() * training_x_cost_mask) # * (T.sum(T.eq(training_x, self.eos_sym)) / (T.sum(training_x_cost_mask)))
         else:
             self.variational_cost = theano.shared(value=numpy.float(0))
             self.latent_utterance_variable_approx_posterior_mean_var = theano.shared(value=numpy.float(0))

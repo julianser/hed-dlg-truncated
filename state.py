@@ -84,7 +84,7 @@ def prototype_state():
     # ----- VARIATIONAL LEARNING -----
     state['add_latent_gaussian_per_utterance'] = True
     state['latent_gaussian_per_utterance_dim'] = 10
-    state['scale_latent_variable_variances'] = 0.01
+    state['scale_latent_variable_variances'] = 1
     state['min_latent_variable_variances'] = 0.001
     state['max_latent_variable_variances'] = 1
 

@@ -190,6 +190,7 @@ def main(args):
     train_posterior_mean_variance = 0
     train_misclass = 0
     train_done = 0
+    train_dialogues_done = 0.0
     ex_done = 0
     is_end_of_batch = True
     start_validation = False
@@ -260,12 +261,13 @@ def main(args):
         train_posterior_mean_variance += posterior_mean_variance
 
         train_done += batch['num_preds']
+        train_dialogues_done += batch['num_dialogues']
 
         this_time = time.time()
         if step % state['train_freq'] == 0:
             elapsed = this_time - start_time
             h, m, s = ConvertTimedelta(this_time - start_time)
-            print ".. %.2d:%.2d:%.2d %4d mb # %d bs %d maxl %d acc_cost = %.4f acc_word_perplexity = %.4f acc_mean_word_error = %.4f acc_mean_variational_cost = %.4f acc_mean_posterior_variance = %.4f" % (h, m, s,\
+            print ".. %.2d:%.2d:%.2d %4d mb # %d bs %d maxl %d acc_cost = %.4f acc_word_perplexity = %.4f acc_mean_word_error = %.4f acc_mean_variational_cost = %.8f acc_mean_posterior_variance = %.8f" % (h, m, s,\
                              state['time_stop'] - (time.time() - start_time)/60.,\
                              step, \
                              batch['x'].shape[1], \
@@ -273,8 +275,8 @@ def main(args):
                              float(train_cost/train_done), \
                              math.exp(float(train_cost/train_done)), \
                              float(train_misclass)/float(train_done), \
-                             float(train_variational_cost/train_done), \
-                             float(train_posterior_mean_variance/train_done))
+                             float(train_variational_cost/train_dialogues_done), \
+                             float(train_posterior_mean_variance/train_dialogues_done))
 
         if valid_data is not None and\
             step % state['valid_freq'] == 0 and step > 1:
@@ -355,8 +357,8 @@ def main(args):
                 logger.debug("[VALIDATION END]") 
                  
                 valid_cost /= valid_wordpreds_done
-                valid_variational_cost /= valid_wordpreds_done
-                valid_posterior_mean_variance /= valid_wordpreds_done
+                valid_variational_cost /= valid_dialogues_done
+                valid_posterior_mean_variance /= valid_dialogues_done
 
                 if len(timings["valid_cost"]) == 0 or valid_cost < numpy.min(timings["valid_cost"]):
                     patience = state['patience']
@@ -370,11 +372,11 @@ def main(args):
 
 
 
-                print "** valid cost (NLL) = %.4f, valid word-perplexity = %.4f, valid variational cost = %.4f, valid mean posterior variance = %.4f, patience = %d" % (float(valid_cost), float(math.exp(valid_cost)), float(valid_variational_cost), float(valid_posterior_mean_variance), patience)
+                print "** valid cost (NLL) = %.4f, valid word-perplexity = %.4f, valid variational cost = %.8f, valid mean posterior variance = %.8f, patience = %d" % (float(valid_cost), float(math.exp(valid_cost)), float(valid_variational_cost), float(valid_posterior_mean_variance), patience)
 
                 timings["train_cost"].append(train_cost/train_done)
-                timings["train_variational_cost"].append(train_variational_cost/train_done)
-                timings["train_posterior_mean_variance"].append(train_posterior_mean_variance/train_done)
+                timings["train_variational_cost"].append(train_variational_cost/train_dialogues_done)
+                timings["train_posterior_mean_variance"].append(train_posterior_mean_variance/train_dialogues_done)
                 timings["valid_cost"].append(valid_cost)
                 timings["valid_variational_cost"].append(valid_variational_cost)
                 timings["valid_posterior_mean_variance"].append(valid_posterior_mean_variance)
