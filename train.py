@@ -194,6 +194,10 @@ def main(args):
     train_misclass = 0
     train_done = 0
     train_dialogues_done = 0.0
+
+    prev_train_cost = 0
+    prev_train_done = 0
+
     ex_done = 0
     is_end_of_batch = True
     start_validation = False
@@ -285,17 +289,29 @@ def main(args):
         this_time = time.time()
         if step % state['train_freq'] == 0:
             elapsed = this_time - start_time
+
+            # Keep track of training cost for the last 'train_freq' batches.
+            current_train_cost = train_cost/train_done
+            if prev_train_done >= 1:
+                current_train_cost = float(train_cost - prev_train_cost)/float(train_done - prev_train_done)
+
+            prev_train_cost = train_cost
+            prev_train_done = train_done
+
             h, m, s = ConvertTimedelta(this_time - start_time)
-            print ".. %.2d:%.2d:%.2d %4d mb # %d bs %d maxl %d acc_cost = %.4f acc_word_perplexity = %.4f acc_mean_word_error = %.4f acc_mean_variational_cost = %.8f acc_mean_posterior_variance = %.8f" % (h, m, s,\
+            print ".. %.2d:%.2d:%.2d %4d mb # %d bs %d maxl %d acc_cost = %.4f acc_word_perplexity = %.4f cur_cost = %.4f cur_word_perplexity = %.4f acc_mean_word_error = %.4f acc_mean_variational_cost = %.8f acc_mean_posterior_variance = %.8f" % (h, m, s,\
                              state['time_stop'] - (time.time() - start_time)/60.,\
                              step, \
                              batch['x'].shape[1], \
                              batch['max_length'], \
                              float(train_cost/train_done), \
                              math.exp(float(train_cost/train_done)), \
+                             current_train_cost, \
+                             math.exp(current_train_cost), \
                              float(train_misclass)/float(train_done), \
                              float(train_variational_cost/train_done), \
                              float(train_posterior_mean_variance/train_dialogues_done))
+
 
         if valid_data is not None and\
             step % state['valid_freq'] == 0 and step > 1:
@@ -449,6 +465,8 @@ def main(args):
                 # Reset train cost, train misclass and train done
                 train_cost = 0
                 train_done = 0
+                prev_train_cost = 0
+                prev_train_done = 0
 
         step += 1
 
