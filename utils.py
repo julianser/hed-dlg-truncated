@@ -198,3 +198,10 @@ def ConvertTimedelta(seconds_diff):
 def SoftMax(x):
     x = T.exp(x - T.max(x, axis=x.ndim-1, keepdims=True))
     return x / T.sum(x, axis=x.ndim-1, keepdims=True)
+
+# Does batch normalization of input variable
+def VariableNormalization(x, axes = 0):
+    return (x - T.mean(x, axis=axes)) / T.sqrt(T.var(x, axis=axes) + 0.0000001)
+
+
+

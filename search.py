@@ -125,8 +125,7 @@ class Sampler(object):
                 reversed_context[(prev_eos_index+2):eos_index, idx] = (reversed_context[(prev_eos_index+2):eos_index, idx])[::-1]
                 prev_eos_index = eos_index
 
-        prev_hd = numpy.zeros((n_samples, self.model.qdim), dtype='float32')
-
+        prev_hd = numpy.zeros((n_samples, self.model.utterance_decoder.complete_hidden_state_size), dtype='float32')
 
         if self.model.direct_connection_between_encoders_and_decoder:
             if self.model.bidirectional_utterance_encoder:
@@ -179,9 +178,15 @@ class Sampler(object):
             if len(indx_update_hs):
                 encoder_states = self.compute_encoding(context[:, indx_update_hs], reversed_context[:, indx_update_hs], self.max_len, semantic_info)
                 prev_hs[indx_update_hs] = encoder_states[1][-1]
-            
+
+            # Compute random vector as additional input
+            ran_vector = self.model.rng.normal(size=(self.model.latent_gaussian_per_utterance_dim)).astype('float32')
+
+            # HACK
+            #ran_vector = 10*self.model.rng.normal(size=(self.model.latent_gaussian_per_utterance_dim)).astype('float32')
+
             # ... done
-            next_probs, new_hd = self.next_probs_predictor(prev_hs, prev_hd, prev_words, context)
+            next_probs, new_hd = self.next_probs_predictor(prev_hs, prev_hd, prev_words, context, ran_vector)
 
             assert next_probs.shape[1] == self.model.idim
             

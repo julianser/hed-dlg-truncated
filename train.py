@@ -140,6 +140,9 @@ def main(args):
 
     eval_batch = model.build_eval_function()
 
+    if model.add_latent_gaussian_per_utterance:
+        eval_grads = model.build_eval_grads()
+
     random_sampler = search.RandomSampler(model)
     beam_sampler = search.BeamSampler(model) 
 
@@ -204,11 +207,13 @@ def main(args):
 
         # Sample stuff
         if step % 200 == 0:
+            # First generate stochastic samples
             for param in model.params:
                 print "%s = %.4f" % (param.name, numpy.sum(param.get_value() ** 2) ** 0.5)
 
             samples, costs = random_sampler.sample([[]], n_samples=1, n_turns=3)
             print "Sampled : {}".format(samples[0])
+
 
         # Training phase
 
@@ -237,12 +242,12 @@ def main(args):
         max_length = batch['max_length']
         x_cost_mask = batch['x_mask']
         x_semantic = batch['x_semantic']
-        x_semantic = batch['x_semantic']
         x_reset = batch['x_reset']
         ran_cost_utterance = batch['ran_var_constutterance']
 
         is_end_of_batch = False
         if numpy.sum(numpy.abs(x_reset)) < 1:
+            print 'END-OF-BATCH EXAMPLE!'
             is_end_of_batch = True
 
         if state['use_nce']:
@@ -250,6 +255,20 @@ def main(args):
             c, variational_cost, posterior_mean_variance = train_batch(x_data, x_data_reversed, y_neg, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance)
         else:
             c, variational_cost, posterior_mean_variance = train_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance)
+
+        print 'cost', c
+        print 'variational_cost', variational_cost
+        print 'posterior_mean_variance', posterior_mean_variance
+        if variational_cost > 2:
+            print 'x_data', x_data
+            print 'x_data_reversed', x_data_reversed
+            print 'max_length', max_length
+            print 'x_cost_mask', x_cost_mask
+            print 'x_semantic', x_semantic
+            print 'x_reset', x_reset
+            print 'ran_cost_utterance', ran_cost_utterance[0:3, 0:3, 0:3]
+
+
 
         if numpy.isinf(c) or numpy.isnan(c):
             logger.warn("Got NaN cost .. skipping")
@@ -275,12 +294,55 @@ def main(args):
                              float(train_cost/train_done), \
                              math.exp(float(train_cost/train_done)), \
                              float(train_misclass)/float(train_done), \
-                             float(train_variational_cost/train_dialogues_done), \
+                             float(train_variational_cost/train_done), \
                              float(train_posterior_mean_variance/train_dialogues_done))
 
         if valid_data is not None and\
             step % state['valid_freq'] == 0 and step > 1:
                 start_validation = True
+
+        # Evaluate gradient variance every 200 steps
+
+        if (step % 200 == 0) and (model.add_latent_gaussian_per_utterance):
+            k_eval = 10
+
+            softmax_costs = numpy.zeros((k_eval), dtype='float32')
+            var_costs = numpy.zeros((k_eval), dtype='float32')
+            gradients_wrt_softmax = numpy.zeros((k_eval, model.qdim, model.qdim), dtype='float32')
+            for k in range(0, k_eval):
+                batch = add_random_variables_to_batch(model.state, model.rng, batch)
+                ran_cost_utterance = batch['ran_var_constutterance']
+                softmax_cost, var_cost, grads_wrt_softmax, grads_wrt_variational_cost = eval_grads(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance)
+                softmax_costs[k] = softmax_cost
+                var_costs[k] = var_cost
+                gradients_wrt_softmax[k, :, :] = grads_wrt_softmax
+
+            print 'mean softmax_costs', numpy.mean(softmax_costs)
+            print 'std softmax_costs', numpy.std(softmax_costs)
+
+            print 'mean var_costs', numpy.mean(var_costs)
+            print 'std var_costs', numpy.std(var_costs)
+
+            print 'mean gradients_wrt_softmax', numpy.mean(numpy.abs(numpy.mean(gradients_wrt_softmax, axis=0))), numpy.mean(gradients_wrt_softmax, axis=0)
+            print 'std gradients_wrt_softmax', numpy.mean(numpy.std(gradients_wrt_softmax, axis=0)), numpy.std(gradients_wrt_softmax, axis=0)
+
+
+            print 'std greater than mean', numpy.where(numpy.std(gradients_wrt_softmax, axis=0) > numpy.abs(numpy.mean(gradients_wrt_softmax, axis=0)))[0].shape[0]
+
+        #print 'tmp_normalizing_constant_a', tmp_normalizing_constant_a
+        #print 'tmp_normalizing_constant_b', tmp_normalizing_constant_b
+        #print 'tmp_c', tmp_c.shape, tmp_c
+        #print 'tmp_d', tmp_d.shape, tmp_d
+
+        #print 'grads_wrt_softmax', grads_wrt_softmax.shape, numpy.sum(numpy.abs(grads_wrt_softmax)), numpy.abs(grads_wrt_softmax[0:5,0:5])
+        #print 'grads_wrt_variational_cost', grads_wrt_variational_cost.shape, numpy.sum(numpy.abs(grads_wrt_variational_cost)), numpy.abs(grads_wrt_variational_cost[0:5,0:5])
+
+        #Wd_s_q = model.utterance_decoder.Wd_s_q.get_value()
+
+        #print 'Wd_s_q all', numpy.sum(numpy.abs(Wd_s_q)), numpy.mean(numpy.abs(Wd_s_q))
+        #print 'Wd_s_q latent', numpy.sum(numpy.abs(Wd_s_q[(Wd_s_q.shape[0]-state['latent_gaussian_per_utterance_dim']):Wd_s_q.shape[0], :])), numpy.mean(numpy.abs(Wd_s_q[(Wd_s_q.shape[0]-state['latent_gaussian_per_utterance_dim']):Wd_s_q.shape[0], :]))
+
+        #print 'Wd_s_q ratio', (numpy.sum(numpy.abs(Wd_s_q[(Wd_s_q.shape[0]-state['latent_gaussian_per_utterance_dim']):Wd_s_q.shape[0], :])) / numpy.sum(numpy.abs(Wd_s_q)))
 
         # Only start validation loop once it's time to validate and once all previous batches have been reset
         if start_validation and is_end_of_batch:
@@ -349,15 +411,18 @@ def main(args):
                     valid_variational_cost += variational_cost
                     valid_posterior_mean_variance += posterior_mean_variance
 
+                    print 'valid_cost', valid_cost
+                    print 'valid_variational_cost', valid_variational_cost
+                    print 'posterior_mean_variance', posterior_mean_variance
+
 
                     valid_wordpreds_done += batch['num_preds']
                     valid_dialogues_done += batch['num_dialogues']
 
-
                 logger.debug("[VALIDATION END]") 
                  
                 valid_cost /= valid_wordpreds_done
-                valid_variational_cost /= valid_dialogues_done
+                valid_variational_cost /= valid_wordpreds_done
                 valid_posterior_mean_variance /= valid_dialogues_done
 
                 if len(timings["valid_cost"]) == 0 or valid_cost < numpy.min(timings["valid_cost"]):
@@ -372,10 +437,10 @@ def main(args):
 
 
 
-                print "** valid cost (NLL) = %.4f, valid word-perplexity = %.4f, valid variational cost = %.8f, valid mean posterior variance = %.8f, patience = %d" % (float(valid_cost), float(math.exp(valid_cost)), float(valid_variational_cost), float(valid_posterior_mean_variance), patience)
+                print "** valid cost (NLL) = %.4f, valid word-perplexity = %.4f, valid variational cost (per word) = %.8f, valid mean posterior variance (per word) = %.8f, patience = %d" % (float(valid_cost), float(math.exp(valid_cost)), float(valid_variational_cost), float(valid_posterior_mean_variance), patience)
 
                 timings["train_cost"].append(train_cost/train_done)
-                timings["train_variational_cost"].append(train_variational_cost/train_dialogues_done)
+                timings["train_variational_cost"].append(train_variational_cost/train_done)
                 timings["train_posterior_mean_variance"].append(train_posterior_mean_variance/train_dialogues_done)
                 timings["valid_cost"].append(valid_cost)
                 timings["valid_variational_cost"].append(valid_variational_cost)

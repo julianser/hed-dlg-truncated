@@ -31,30 +31,50 @@ def prototype_state():
     # Gradients will be computed on the subsequence, and the last hidden state of all RNNs will
     # be used to initialize the hidden state of the RNNs in the next subsequence.
     state['max_grad_steps'] = 80
-    # If this flag is on, the hidden state between RNNs in subsequences is always initialized to zero
+
+    # If this flag is on, the hidden state between RNNs in subsequences is always initialized to zero.
+    # Basically, set this flag on if you want to reset all RNN hidden states between 'max_grad_steps' time steps
     state['reset_hidden_states_between_subsequences'] = False
 
-
-
-
-    # Maxout requires qdim = 2x rankdim
+    # If on, will use NCE (Noise-Contrastive Estimation) to train model.
+    # This is significantly faster for large vocabularies (e.g. more than 20K words), 
+    # but experiments show that this degrades performance.
     state['use_nce'] = False
+    # If on, the maxout activation function will be applied to the utterance decoders output unit.
+    # This requires qdim = 2x rankdim
     state['maxout_out'] = False
+    # If on, a two-layer MLPs will applied on the utterance decoder hidden state before 
+    # outputting the distribution over words.
     state['deep_out'] = True
 
     # If on, there will be an extra MLP between utterance and dialogue encoder
     state['deep_dialogue_input'] = False
 
-    # ----- ACTIV ---- 
+    # ----- ACTIVATION FUNCTIONS ---- 
+    # Default and recommended setting is: tanh.
+    # The utterance encoder and utterance decoder activation function
     state['sent_rec_activation'] = 'lambda x: T.tanh(x)'
+    # The dialogue encoder activation function
     state['dialogue_rec_activation'] = 'lambda x: T.tanh(x)'
     
-    state['decoder_bias_type'] = 'all' # first, or selective 
+    # Determines how to input the utterance encoder and dialogue encoder into the utterance decoder RNN hidden state:
+    #  - 'first': initializes first hidden state of decoder using encoders
+    #  - 'all': initializes first hidden state of decoder using encoders, 
+    #            and inputs all hidden states of decoder using encoders
+    #  - 'selective': initializes first hidden state of decoder using encoders, 
+    #                 and inputs all hidden states of decoder using encoders.
+    #                 Furthermore, a gating function is applied to the encoder input 
+    #                 to turn off certain dimensions if necessary.
+    #
+    # Experiments show that 'all' is most effective.
+    state['decoder_bias_type'] = 'all' 
 
-    state['sent_step_type'] = 'gated'
-    state['dialogue_step_type'] = 'gated' 
+    # Define the gating function for the three RNNs.
+    state['utterance_encoder_gating'] = 'GRU' # Supports 'None' and 'GRU'
+    state['dialogue_encoder_gating'] = 'GRU' # Supports 'None' and 'GRU'
+    state['utterance_decoder_gating'] = 'GRU' # Supports 'None', 'GRU' and 'LSTM'
 
-    # if on, two utterances encoders (one forward and one backward) will be used, otherwise only a forward utterance encoder is used
+    # If on, two utterances encoders (one forward and one backward) will be used, otherwise only a forward utterance encoder is used
     state['bidirectional_utterance_encoder'] = False
 
     # If on, there will be a direct connection between utterance encoder and utterane decoder RNNs
@@ -81,19 +101,33 @@ def prototype_state():
     # Dimensionality of low-rank approximation
     state['rankdim'] = 256
 
-    # ----- VARIATIONAL LEARNING -----
-    state['add_latent_gaussian_per_utterance'] = True
+    # ----- LATENT VARIABLES WITH VARIATIONAL LEARNING -----
+    # If on, a Gaussian latent variable is added at the beginning of each utterance.
+    # The utterance decoder will be conditioned on this latent variable,
+    # and training will be done using the variational lower bound. 
+    # See, for example, the variational auto-encoder by Kingma et al.
+    state['add_latent_gaussian_per_utterance'] = False
+    # If on, will condition the latent variable on the dialogue encoder
+    state['condition_latent_variable_on_dialogue_encoder'] = False
+    # Dimensionality of Gaussian latent variable (under the assumption that covariance matrix is diagonal)
     state['latent_gaussian_per_utterance_dim'] = 10
-    state['scale_latent_variable_variances'] = 1
-    state['min_latent_variable_variances'] = 0.001
-    state['max_latent_variable_variances'] = 1
+    # If on, batch normalization will be applied to the MLP computing the prior and posterior of the latent variable.
+    # The normalization is done both w.r.t. to the batch and temporal dimension.
+    state['train_latent_gaussians_with_batch_normalization'] = False
+    # The (diagonal) covariance matrix is scaled by this value.
+    # Initial diagonal covariance matrix will be a softplus function times this value.
+    # By setting it to a high number (e.g. 1 or 10), the KL divergence will be relatively low at the beginning of
+    # training.
+    state['scale_latent_variable_variances'] = 10
+    # If on, the utterance decoder will ONLY be conditioned on the Gaussian latent variable.
+    state['condition_decoder_only_on_latent_variable'] = False
 
     # Threshold to clip the gradient
     state['cutoff'] = 1.
     state['lr'] = 0.0001
 
     # Early stopping configuration
-    state['patience'] = 5
+    state['patience'] = 20
     state['cost_threshold'] = 1.003
 
     # Initialization configuration
@@ -132,7 +166,6 @@ def prototype_state():
 
     state['compute_mutual_information'] = True # If true, the empirical mutural information will be calculcated on the validation set
 
-
     return state
 
 def prototype_test():
@@ -156,7 +189,7 @@ def prototype_test():
     #state['secondary_train_dialogues'] = "./tests/data/ttrain.dialogues.pkl"
     #state['secondary_proportion'] = 0.5
 
-    state['max_grad_steps'] = 5
+    state['max_grad_steps'] = 20
     
     # Handle bleu evaluation
     state['bleu_evaluation'] = "./tests/bleu/bleu_evaluation"
@@ -180,8 +213,9 @@ def prototype_test():
     state['deep_out'] = True
     state['deep_dialogue_input'] = False
 
-    state['sent_step_type'] = 'gated'
-    state['dialogue_step_type'] = 'gated' 
+    state['utterance_encoder_gating'] = 'GRU'
+    state['dialogue_encoder_gating'] = 'GRU'
+    state['utterance_decoder_gating'] = 'GRU'
     state['bidirectional_utterance_encoder'] = True 
     state['direct_connection_between_encoders_and_decoder'] = False
 
@@ -189,7 +223,7 @@ def prototype_test():
     state['bs'] = 5
     state['sort_k_batches'] = 1
     state['use_nce'] = False
-    state['decoder_bias_type'] = 'all' #'selective' 
+    state['decoder_bias_type'] = 'all' # 'none', 'all' or 'selective' 
     
     state['qdim'] = 5 #0 
     # Dimensionality of dialogue hidden layer 
