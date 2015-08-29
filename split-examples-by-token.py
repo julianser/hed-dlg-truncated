@@ -97,14 +97,18 @@ for i in range(data_len):
         merged_example = []
         for k in reversed(range(args.consecutive_examples_to_merge)):
             merged_example += new_examples[start_index-k-1] + [int(args.token_id)]
-
         processed_binarized_corpus.append(merged_example)
 
-    merged_example = []
-    for k in range((s-1)*args.consecutive_examples_to_merge, len(new_examples)):
-        merged_example += new_examples[k] + [int(args.token_id)]
-
-    processed_binarized_corpus.append(merged_example)
+    if s > 0:
+        merged_example = []
+        for k in range((s-1)*args.consecutive_examples_to_merge, len(new_examples)):
+            merged_example += new_examples[k] + [int(args.token_id)]
+        processed_binarized_corpus.append(merged_example)
+    else:
+        merged_example = []
+        for k in range(len(new_examples)):
+            merged_example += new_examples[k] + [int(args.token_id)]
+        processed_binarized_corpus.append(merged_example)
 
 
 logger.info('New data len is %d' % len(processed_binarized_corpus))
