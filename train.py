@@ -445,6 +445,7 @@ def main(args):
                     patience = state['patience']
                     # Saving model if decrease in validation cost
                     save(model, timings)
+                    print 'best valid_cost', valid_cost
                 elif valid_cost >= timings["valid_cost"][-1] * state['cost_threshold']:
                     patience -= 1
 

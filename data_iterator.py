@@ -78,7 +78,7 @@ def add_random_variables_to_batch(state, rng, batch, prev_batch = None):
     return batch
 
 
-def create_padded_batch(state, rng, x):
+def create_padded_batch(state, rng, x, force_end_of_utterance_token = False):
     # Find max length in batch
     mx = 0
     for idx in xrange(len(x[0])):
@@ -125,7 +125,8 @@ def create_padded_batch(state, rng, x):
         
         # Mark the end of phrase
         if len(x[0][idx]) < mx:
-            X[dialogue_length:, idx] = state['eos_sym']
+            if force_end_of_utterance_token:
+                X[dialogue_length:, idx] = state['eos_sym']
 
         # Initialize Xmask column with ones in all positions that
         # were just set in X (except for first eos symbol, because we are not evaluating this). 
@@ -153,7 +154,7 @@ def create_padded_batch(state, rng, x):
         #print 'Ran_Var_ConstUtterance[j, :, idx]', Ran_Var_ConstUtterance[:, :, idx]
 
     assert num_preds == numpy.sum(Xmask) - numpy.sum(Xmask[0, :])
-    
+
     return {'x': X,                                                 \
             'x_reversed': X_reversed,                               \
             'x_mask': Xmask,                                        \
