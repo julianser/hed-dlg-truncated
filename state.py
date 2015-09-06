@@ -234,6 +234,74 @@ def prototype_test():
     state['rankdim'] = 10
     return state
 
+def prototype_test_variational():
+    state = prototype_state()
+    
+    # Fill your paths here! 
+    state['train_dialogues'] = "./tests/data/ttrain.dialogues.pkl"
+    state['test_dialogues'] = "./tests/data/ttest.dialogues.pkl"
+    state['valid_dialogues'] = "./tests/data/tvalid.dialogues.pkl"
+    state['dictionary'] = "./tests/data/ttrain.dict.pkl"
+    state['save_dir'] = "./tests/models/"
+
+    # Paths for semantic information 
+    state['train_semantic'] = "./tests/data/ttrain.semantic.pkl"
+    state['test_semantic'] = "./tests/data/ttest.semantic.pkl"
+    state['valid_semantic'] = "./tests/data/tvalid.semantic.pkl"
+    state['semantic_information_dim'] = 2
+
+    state['max_grad_steps'] = 20
+    
+    # Handle bleu evaluation
+    state['bleu_evaluation'] = "./tests/bleu/bleu_evaluation"
+    state['bleu_context_length'] = 2
+
+    # Handle pretrained word embeddings. Using this requires rankdim=10
+    state['initialize_from_pretrained_word_embeddings'] = True
+    state['pretrained_word_embeddings_file'] = './tests/data/MT_WordEmb.pkl' 
+    state['fix_pretrained_word_embeddings'] = True
+    
+    # Validation frequency
+    state['valid_freq'] = 50
+
+    state['collaps_to_standard_rnn'] = False
+    
+    # Variables
+    state['prefix'] = "testmodel_" 
+    state['updater'] = 'adam'
+    
+    state['maxout_out'] = False
+    state['deep_out'] = True
+    state['deep_dialogue_input'] = True
+    state['direct_connection_between_encoders_and_decoder'] = True
+    state['deep_direct_connection'] = True
+
+    state['utterance_encoder_gating'] = 'GRU'
+    state['dialogue_encoder_gating'] = 'GRU'
+    state['utterance_decoder_gating'] = 'GRU'
+
+    state['bidirectional_utterance_encoder'] = True
+    state['add_latent_gaussian_per_utterance'] = True
+    state['latent_gaussian_per_utterance_dim'] = 5
+    state['condition_latent_variable_on_dialogue_encoder'] = True
+
+
+
+    # If out of memory, modify this!
+    state['bs'] = 5
+    state['sort_k_batches'] = 1
+    state['use_nce'] = False
+    state['decoder_bias_type'] = 'all' # 'none', 'all' or 'selective' 
+    
+    state['qdim_encoder'] = 15 #0
+    state['qdim_decoder'] = 5 #0
+    # Dimensionality of dialogue hidden layer 
+    state['sdim'] = 10 # 0
+    # Dimensionality of low-rank approximation
+    state['rankdim'] = 10
+    return state
+
+
 def prototype_movies():
     state = prototype_state()
     

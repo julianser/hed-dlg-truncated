@@ -26,7 +26,7 @@ from utils import *
 import operator
 
 # Theano speed-up
-theano.config.scan.allow_gc = False
+#theano.config.scan.allow_gc = False
 #
 
 def add_to_params(params, new_param):
@@ -1193,9 +1193,9 @@ class DialogEncoderDecoder(Model):
             if self.add_latent_gaussian_per_utterance:
 
                 if self.condition_latent_variable_on_dialogue_encoder:
-                    self.hs_to_condition_latent_variable_on = self.beam_hs.dimshuffle((0, 'x', 1))
+                    self.hs_to_condition_latent_variable_on = self.beam_hs.dimshuffle((0, 'x', 1))[:, :, 0:self.sdim]
                 else:
-                    self.hs_to_condition_latent_variable_on = T.alloc(np.float32(0), self.beam_hs.shape[0], 1, self.beam_hs.shape[1])
+                    self.hs_to_condition_latent_variable_on = T.alloc(np.float32(0), self.beam_hs.shape[0], 1, self.beam_hs.shape[1])[:, :, 0:self.sdim]
 
 
                 _prior_out = self.latent_utterance_variable_prior_encoder.build_encoder(self.hs_to_condition_latent_variable_on, self.beam_x_data)
