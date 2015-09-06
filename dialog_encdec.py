@@ -53,17 +53,17 @@ class UtteranceEncoder(EncoderDecoderBase):
         self.W_emb = word_embedding_param
 
         """ sent weights """
-        self.W_in = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='W_in'+self.name))
-        self.W_hh = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='W_hh'+self.name))
-        self.b_hh = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='b_hh'+self.name))
+        self.W_in = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim_encoder), name='W_in'+self.name))
+        self.W_hh = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim_encoder, self.qdim_encoder), name='W_hh'+self.name))
+        self.b_hh = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim_encoder,), dtype='float32'), name='b_hh'+self.name))
         
         if self.utterance_encoder_gating == "GRU":
-            self.W_in_r = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='W_in_r'+self.name))
-            self.W_in_z = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='W_in_z'+self.name))
-            self.W_hh_r = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='W_hh_r'+self.name))
-            self.W_hh_z = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='W_hh_z'+self.name))
-            self.b_z = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='b_z'+self.name))
-            self.b_r = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='b_r'+self.name))
+            self.W_in_r = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim_encoder), name='W_in_r'+self.name))
+            self.W_in_z = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim_encoder), name='W_in_z'+self.name))
+            self.W_hh_r = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim_encoder, self.qdim_encoder), name='W_hh_r'+self.name))
+            self.W_hh_z = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim_encoder, self.qdim_encoder), name='W_hh_z'+self.name))
+            self.b_z = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim_encoder,), dtype='float32'), name='b_z'+self.name))
+            self.b_r = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim_encoder,), dtype='float32'), name='b_r'+self.name))
 
     def approx_embedder(self, x):
         return self.W_emb[x]
@@ -118,7 +118,7 @@ class UtteranceEncoder(EncoderDecoderBase):
             if prev_state:
                 h_0 = prev_state
             else:
-                h_0 = T.alloc(np.float32(0), batch_size, self.qdim)
+                h_0 = T.alloc(np.float32(0), batch_size, self.qdim_encoder)
 
         # in sampling mode (i.e. one step) we require 
         else:
@@ -185,12 +185,12 @@ class DialogEncoder(EncoderDecoderBase):
 
         if self.bidirectional_utterance_encoder:
             # With the bidirectional flag, the dialog encoder gets input 
-            # from both the forward and backward utterance encoders, hence it is double qdim
-            input_dim = self.qdim * 2
+            # from both the forward and backward utterance encoders, hence it is double qdim_encoder
+            input_dim = self.qdim_encoder * 2
         else:
             # Without the bidirectional flag, the dialog encoder only gets input
-            # from the forward utterance encoder, which has dim self.qdim
-            input_dim = self.qdim
+            # from the forward utterance encoder, which has dim self.qdim_encoder
+            input_dim = self.qdim_encoder
 
         transformed_input_dim = input_dim
         if self.deep_dialogue_input:
@@ -406,12 +406,12 @@ class UtteranceDecoder(EncoderDecoderBase):
     def init_params(self): 
         if self.direct_connection_between_encoders_and_decoder:
             # When there is a direct connection between encoder and decoder, 
-            # the input has dimensionality sdim + qdim if forward encoder, and
-            # sdim + 2 x qdim for bidirectional encoder
+            # the input has dimensionality sdim + qdim_decoder if forward encoder, and
+            # sdim + 2 x qdim_decoder for bidirectional encoder
             if self.bidirectional_utterance_encoder:
-                self.input_dim = self.sdim + self.qdim*2
+                self.input_dim = self.sdim + self.qdim_encoder*2
             else:
-                self.input_dim = self.sdim + self.qdim
+                self.input_dim = self.sdim + self.qdim_encoder
         else:
             # When there is no connection between encoder and decoder, 
             # the input has dimensionality sdim
@@ -425,9 +425,9 @@ class UtteranceDecoder(EncoderDecoderBase):
 
         # For LSTM decoder, the state hd is the concatenation of the cell state and hidden state
         if self.utterance_decoder_gating == "LSTM":
-            self.complete_hidden_state_size = self.qdim*2
+            self.complete_hidden_state_size = self.qdim_decoder*2
         else:
-            self.complete_hidden_state_size = self.qdim
+            self.complete_hidden_state_size = self.qdim_decoder
 
 
 
@@ -435,9 +435,9 @@ class UtteranceDecoder(EncoderDecoderBase):
         self.bd_out = add_to_params(self.params, theano.shared(value=np.zeros((self.idim,), dtype='float32'), name='bd_out'))
         self.Wd_emb = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.idim, self.rankdim), name='Wd_emb'))
 
-        self.Wd_hh = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='Wd_hh'))
-        self.bd_hh = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='bd_hh'))
-        self.Wd_in = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='Wd_in')) 
+        self.Wd_hh = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim_decoder, self.qdim_decoder), name='Wd_hh'))
+        self.bd_hh = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim_decoder,), dtype='float32'), name='bd_hh'))
+        self.Wd_in = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim_decoder), name='Wd_in')) 
 
         # We only include the initial hidden state if the utterance decoder is NOT reset 
         # and if its NOT a collapsed model (i.e. collapsed to standard RNN). 
@@ -447,52 +447,52 @@ class UtteranceDecoder(EncoderDecoderBase):
             self.bd_s_0 = add_to_params(self.params, theano.shared(value=np.zeros((self.complete_hidden_state_size,), dtype='float32'), name='bd_s_0'))
 
         if self.utterance_decoder_gating == "GRU":
-            self.Wd_in_r = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='Wd_in_r'))
-            self.Wd_in_z = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='Wd_in_z'))
-            self.Wd_hh_r = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='Wd_hh_r'))
-            self.Wd_hh_z = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim, self.qdim), name='Wd_hh_z'))
-            self.bd_r = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='bd_r'))
-            self.bd_z = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='bd_z'))
+            self.Wd_in_r = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim_decoder), name='Wd_in_r'))
+            self.Wd_in_z = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim_decoder), name='Wd_in_z'))
+            self.Wd_hh_r = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim_decoder, self.qdim_decoder), name='Wd_hh_r'))
+            self.Wd_hh_z = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.qdim_decoder, self.qdim_decoder), name='Wd_hh_z'))
+            self.bd_r = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim_decoder,), dtype='float32'), name='bd_r'))
+            self.bd_z = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim_decoder,), dtype='float32'), name='bd_z'))
         
             if self.decoder_bias_type == 'all':
-                self.Wd_s_q = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim), name='Wd_s_q'))
-                self.Wd_s_z = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim), name='Wd_s_z'))
-                self.Wd_s_r = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim), name='Wd_s_r'))
+                self.Wd_s_q = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim_decoder), name='Wd_s_q'))
+                self.Wd_s_z = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim_decoder), name='Wd_s_z'))
+                self.Wd_s_r = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim_decoder), name='Wd_s_r'))
 
         elif self.utterance_decoder_gating == "LSTM":
             # Input gate
-            self.Wd_in_i = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='Wd_in_i'))
-            self.Wd_hh_i = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim, self.qdim), name='Wd_hh_i'))
-            self.Wd_c_i = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim, self.qdim), name='Wd_c_i'))
-            self.bd_i = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='bd_i'))
+            self.Wd_in_i = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim_decoder), name='Wd_in_i'))
+            self.Wd_hh_i = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim_decoder, self.qdim_decoder), name='Wd_hh_i'))
+            self.Wd_c_i = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim_decoder, self.qdim_decoder), name='Wd_c_i'))
+            self.bd_i = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim_decoder,), dtype='float32'), name='bd_i'))
 
             # Forget gate
-            self.Wd_in_f = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='Wd_in_f'))
-            self.Wd_hh_f = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim, self.qdim), name='Wd_hh_f'))
-            self.Wd_c_f = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim, self.qdim), name='Wd_c_f'))
-            self.bd_f = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='bd_f'))
+            self.Wd_in_f = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim_decoder), name='Wd_in_f'))
+            self.Wd_hh_f = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim_decoder, self.qdim_decoder), name='Wd_hh_f'))
+            self.Wd_c_f = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim_decoder, self.qdim_decoder), name='Wd_c_f'))
+            self.bd_f = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim_decoder,), dtype='float32'), name='bd_f'))
 
             # Cell input
             # Handled by Wd_in, Wd_hh, bd_c
-            #self.Wd_in_c = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='Wd_in_c'))
-            #self.Wd_hh_c = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim, self.qdim), name='Wd_hh_c'))
-            #self.bd_c = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='bd_c'))
+            #self.Wd_in_c = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim_decoder), name='Wd_in_c'))
+            #self.Wd_hh_c = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim_decoder, self.qdim_decoder), name='Wd_hh_c'))
+            #self.bd_c = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim_decoder,), dtype='float32'), name='bd_c'))
 
             # Output gate
-            self.Wd_in_o = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim), name='Wd_in_o'))
-            self.Wd_hh_o = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim, self.qdim), name='Wd_hh_o'))
-            self.Wd_c_o = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim, self.qdim), name='Wd_c_o'))
-            self.bd_o = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim,), dtype='float32'), name='bd_o'))
+            self.Wd_in_o = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.rankdim, self.qdim_decoder), name='Wd_in_o'))
+            self.Wd_hh_o = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim_decoder, self.qdim_decoder), name='Wd_hh_o'))
+            self.Wd_c_o = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim_decoder, self.qdim_decoder), name='Wd_c_o'))
+            self.bd_o = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim_decoder,), dtype='float32'), name='bd_o'))
 
             if self.decoder_bias_type == 'all' or self.decoder_bias_type == 'selective':
                 # Input gate
-                self.Wd_s_i = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim), name='Wd_s_i'))
+                self.Wd_s_i = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim_decoder), name='Wd_s_i'))
                 # Forget gate
-                self.Wd_s_f = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim), name='Wd_s_f'))
+                self.Wd_s_f = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim_decoder), name='Wd_s_f'))
                 # Cell input
-                self.Wd_s = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim), name='Wd_s'))
+                self.Wd_s = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim_decoder), name='Wd_s'))
                 # Output gate
-                self.Wd_s_o = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim), name='Wd_s_o'))
+                self.Wd_s_o = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim_decoder), name='Wd_s_o'))
 
 
         if self.decoder_bias_type == 'selective':
@@ -508,15 +508,15 @@ class UtteranceDecoder(EncoderDecoderBase):
                                                         name='Wd_sel_e'))
                 # h_{n-1} -> g_r
                 self.Wd_sel_h = add_to_params(self.params, \
-                                          theano.shared(value=NormalInit(self.rng, self.qdim, self.input_dim), \
+                                          theano.shared(value=NormalInit(self.rng, self.qdim_decoder, self.input_dim), \
                                                         name='Wd_sel_h'))
                 # c_{n-1} -> g_r
                 self.Wd_sel_c = add_to_params(self.params, \
-                                          theano.shared(value=NormalInit(self.rng, self.qdim, self.input_dim), \
+                                          theano.shared(value=NormalInit(self.rng, self.qdim_decoder, self.input_dim), \
                                                         name='Wd_sel_h'))
             else:
                 self.bd_sel = add_to_params(self.params, theano.shared(value=np.zeros((self.input_dim,), dtype='float32'), name='bd_sel'))
-                self.Wd_s_q = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim), name='Wd_s_q'))
+                self.Wd_s_q = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim_decoder), name='Wd_s_q'))
                 # s -> g_r
                 self.Wd_sel_s = add_to_params(self.params, \
                                           theano.shared(value=NormalInit(self.rng, self.input_dim, self.input_dim), \
@@ -527,7 +527,7 @@ class UtteranceDecoder(EncoderDecoderBase):
                                                         name='Wd_sel_e'))
                 # h_{n-1} -> g_r
                 self.Wd_sel_h = add_to_params(self.params, \
-                                          theano.shared(value=NormalInit(self.rng, self.qdim, self.input_dim), \
+                                          theano.shared(value=NormalInit(self.rng, self.qdim_decoder, self.input_dim), \
                                                         name='Wd_sel_h'))
          
 
@@ -537,15 +537,15 @@ class UtteranceDecoder(EncoderDecoderBase):
         # Output layer weights
         ######################
         if self.maxout_out:
-            if int(self.qdim) != 2*int(self.rankdim):
+            if int(self.qdim_decoder) != 2*int(self.rankdim):
                 raise ValueError('Error with maxout configuration in UtteranceDecoder!'
-                                 + 'For maxout to work we need qdim = 2x rankdim')
+                                 + 'For maxout to work we need qdim_decoder = 2x rankdim')
 
-        out_target_dim = self.qdim
+        out_target_dim = self.qdim_decoder
         if not self.maxout_out:
             out_target_dim = self.rankdim
 
-        self.Wd_out = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim, out_target_dim), name='Wd_out'))
+        self.Wd_out = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.qdim_decoder, out_target_dim), name='Wd_out'))
          
         # Set up deep output
         if self.deep_out:
@@ -558,9 +558,9 @@ class UtteranceDecoder(EncoderDecoderBase):
     def build_output_layer(self, hs, xd, hd):
         if self.utterance_decoder_gating == "LSTM":
             if hd.ndim != 2:
-                pre_activ = T.dot(hd[:, :, 0:self.qdim], self.Wd_out)
+                pre_activ = T.dot(hd[:, :, 0:self.qdim_decoder], self.Wd_out)
             else:
-                pre_activ = T.dot(hd[:, 0:self.qdim], self.Wd_out)
+                pre_activ = T.dot(hd[:, 0:self.qdim_decoder], self.Wd_out)
         else:
             pre_activ = T.dot(hd, self.Wd_out)
         
@@ -626,7 +626,7 @@ class UtteranceDecoder(EncoderDecoderBase):
             assert prev_state
          
         # if mode == EVALUATION
-        #   xd = (timesteps, batch_size, qdim)
+        #   xd = (timesteps, batch_size, qdim_decoder)
         #
         # if mode != EVALUATION
         #   xd = (n_samples, dim)
@@ -646,7 +646,7 @@ class UtteranceDecoder(EncoderDecoderBase):
         
         # Run the decoder
         #if mode == UtteranceDecoder.EVALUATION or mode == UtteranceDecoder.NCE:
-        #    hd_init = T.alloc(np.float32(0), x.shape[1], self.qdim)
+        #    hd_init = T.alloc(np.float32(0), x.shape[1], self.qdim_decoder)
         #else:
         #    hd_init = prev_state
 
@@ -674,7 +674,7 @@ class UtteranceDecoder(EncoderDecoderBase):
          
         # If the mode of the decoder is EVALUATION
         # then we evaluate by default all the sentence
-        # xd - i.e. xd.ndim == 3, xd = (timesteps, batch_size, qdim)
+        # xd - i.e. xd.ndim == 3, xd = (timesteps, batch_size, qdim_decoder)
         if mode == UtteranceDecoder.EVALUATION or mode == UtteranceDecoder.NCE: 
             _res, _ = theano.scan(f_dec,
                               sequences=[xd, xmask, decoder_inp],\
@@ -736,8 +736,8 @@ class UtteranceDecoder(EncoderDecoderBase):
 
         # Given the previous concatenated hidden states, split them up into output state and cell state.
         # By convention, we assume that the output state is always first, and the cell state second.
-        hd_tm1_tilde = hd_tm1[:, 0:self.qdim]
-        cd_tm1_tilde = hd_tm1[:, self.qdim:self.qdim*2]
+        hd_tm1_tilde = hd_tm1[:, 0:self.qdim_decoder]
+        cd_tm1_tilde = hd_tm1[:, self.qdim_decoder:self.qdim_decoder*2]
 
         # ^ iff x_{t - 1} = </s> (m_t = 0) then x_{t - 1} = 0
         # and hd_{t - 1} = tanh(W_s_0 decoder_inp_t + bd_s_0) else hd_{t - 1} is left unchanged (m_t = 1)
@@ -1388,25 +1388,25 @@ class DialogEncoderDecoder(Model):
         # Variables to store encoder and decoder states
         if self.bidirectional_utterance_encoder:
             # Previous states variables
-            self.ph_fwd = theano.shared(value=numpy.zeros((self.bs, self.qdim), dtype='float32'), name='ph_fwd')
-            self.ph_bck = theano.shared(value=numpy.zeros((self.bs, self.qdim), dtype='float32'), name='ph_bck')
+            self.ph_fwd = theano.shared(value=numpy.zeros((self.bs, self.qdim_encoder), dtype='float32'), name='ph_fwd')
+            self.ph_bck = theano.shared(value=numpy.zeros((self.bs, self.qdim_encoder), dtype='float32'), name='ph_bck')
             self.phs = theano.shared(value=numpy.zeros((self.bs, self.sdim), dtype='float32'), name='phs')
 
             if self.direct_connection_between_encoders_and_decoder:
-                self.phs_dummy = theano.shared(value=numpy.zeros((self.bs, self.qdim*2), dtype='float32'), name='phs_dummy')
+                self.phs_dummy = theano.shared(value=numpy.zeros((self.bs, self.qdim_encoder*2), dtype='float32'), name='phs_dummy')
 
         else:
             # Previous states variables
-            self.ph = theano.shared(value=numpy.zeros((self.bs, self.qdim), dtype='float32'), name='ph')
+            self.ph = theano.shared(value=numpy.zeros((self.bs, self.qdim_encoder), dtype='float32'), name='ph')
             self.phs = theano.shared(value=numpy.zeros((self.bs, self.sdim), dtype='float32'), name='phs')
 
             if self.direct_connection_between_encoders_and_decoder:
-                self.phs_dummy = theano.shared(value=numpy.zeros((self.bs, self.qdim), dtype='float32'), name='phs_dummy')
+                self.phs_dummy = theano.shared(value=numpy.zeros((self.bs, self.qdim_encoder), dtype='float32'), name='phs_dummy')
 
         if self.utterance_decoder_gating == 'LSTM':
-            self.phd = theano.shared(value=numpy.zeros((self.bs, self.qdim*2), dtype='float32'), name='phd')
+            self.phd = theano.shared(value=numpy.zeros((self.bs, self.qdim_decoder*2), dtype='float32'), name='phd')
         else:
-            self.phd = theano.shared(value=numpy.zeros((self.bs, self.qdim), dtype='float32'), name='phd')
+            self.phd = theano.shared(value=numpy.zeros((self.bs, self.qdim_decoder), dtype='float32'), name='phd')
 
         if self.add_latent_gaussian_per_utterance:
             self.platent_utterance_variable_prior = theano.shared(value=numpy.zeros((self.bs, self.latent_gaussian_per_utterance_dim), dtype='float32'), name='platent_utterance_variable_prior')
@@ -1467,16 +1467,16 @@ class DialogEncoderDecoder(Model):
 
             logger.debug("Initializing approximate posterior encoder for utterance-level latent variable")
             if self.bidirectional_utterance_encoder:
-                posterior_input_size = self.sdim + self.qdim*2
+                posterior_input_size = self.sdim + self.qdim_encoder*2
             else:
-                posterior_input_size = self.sdim + self.qdim
+                posterior_input_size = self.sdim + self.qdim_encoder
 
             # Retrieve hidden state at the end of next utterance from the utterance encoders
             # (or at the end of the batch, if there are no end-of-token symbols at the end of the batch)
             if self.bidirectional_utterance_encoder:
-                self.utterance_encoder_reverser = DialogLevelReverser(self.state, self.qdim, self.rng, self)
+                self.utterance_encoder_reverser = DialogLevelReverser(self.state, self.qdim_encoder, self.rng, self)
             else:
-                self.utterance_encoder_reverser = DialogLevelReverser(self.state, self.qdim*2, self.rng, self)
+                self.utterance_encoder_reverser = DialogLevelReverser(self.state, self.qdim_encoder*2, self.rng, self)
 
             self.h_future = self.utterance_encoder_reverser.build_encoder( \
                                      self.h, \
@@ -1536,9 +1536,9 @@ class DialogEncoderDecoder(Model):
         if self.direct_connection_between_encoders_and_decoder:
             logger.debug("Initializing dialog dummy encoder")
             if self.bidirectional_utterance_encoder:
-                self.dialog_dummy_encoder = DialogDummyEncoder(self.state, self.rng, self, self.qdim*2)
+                self.dialog_dummy_encoder = DialogDummyEncoder(self.state, self.rng, self, self.qdim_encoder*2)
             else:
-                self.dialog_dummy_encoder = DialogDummyEncoder(self.state, self.rng, self, self.qdim)
+                self.dialog_dummy_encoder = DialogDummyEncoder(self.state, self.rng, self, self.qdim_encoder)
 
             logger.debug("Build dialog dummy encoder")
             self.hs_dummy = self.dialog_dummy_encoder.build_encoder(self.h, training_x, xmask=training_hs_mask, prev_state=self.phs_dummy)

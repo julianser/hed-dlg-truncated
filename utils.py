@@ -154,14 +154,12 @@ def OrthogonalInit(rng, sizeX, sizeY, sparsity=-1, scale=1):
         values[dx, perm[:sparsity]] = new_vals
 
     # Use SciPy:
-    print 'Trying!'
     if sizeX*sizeY > 20000000:
         import scipy
         u,s,v = scipy.linalg.svd(values)
     else:
         u,s,v = numpy.linalg.svd(values)
     values = u * scale
-    print 'Done!'
     return values.astype(theano.config.floatX)
 
 def GrabProbs(classProbs, target, gRange=None):

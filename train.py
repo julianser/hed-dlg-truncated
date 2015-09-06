@@ -324,7 +324,7 @@ def main(args):
 
             softmax_costs = numpy.zeros((k_eval), dtype='float32')
             var_costs = numpy.zeros((k_eval), dtype='float32')
-            gradients_wrt_softmax = numpy.zeros((k_eval, model.qdim, model.qdim), dtype='float32')
+            gradients_wrt_softmax = numpy.zeros((k_eval, model.qdim_decoder, model.qdim_decoder), dtype='float32')
             for k in range(0, k_eval):
                 batch = add_random_variables_to_batch(model.state, model.rng, batch)
                 ran_cost_utterance = batch['ran_var_constutterance']

@@ -129,9 +129,9 @@ class Sampler(object):
 
         if self.model.direct_connection_between_encoders_and_decoder:
             if self.model.bidirectional_utterance_encoder:
-                dialog_enc_size = self.model.sdim+self.model.qdim*2
+                dialog_enc_size = self.model.sdim+self.model.qdim_encoder*2
             else:
-                dialog_enc_size = self.model.sdim+self.model.qdim
+                dialog_enc_size = self.model.sdim+self.model.qdim_encoder
         else:
             dialog_enc_size = self.model.sdim
 

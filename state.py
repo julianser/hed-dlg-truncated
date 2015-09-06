@@ -41,7 +41,7 @@ def prototype_state():
     # but experiments show that this degrades performance.
     state['use_nce'] = False
     # If on, the maxout activation function will be applied to the utterance decoders output unit.
-    # This requires qdim = 2x rankdim
+    # This requires qdim_decoder = 2x rankdim
     state['maxout_out'] = False
     # If on, a two-layer MLPs will applied on the utterance decoder hidden state before 
     # outputting the distribution over words.
@@ -95,7 +95,8 @@ def prototype_state():
 
     # ----- SIZES ----
     # Dimensionality of hidden layers
-    state['qdim'] = 512
+    state['qdim_encoder'] = 512
+    state['qdim_decoder'] = 512
     # Dimensionality of dialogue hidden layer 
     state['sdim'] = 1000
     # Dimensionality of low-rank approximation
@@ -225,7 +226,8 @@ def prototype_test():
     state['use_nce'] = False
     state['decoder_bias_type'] = 'all' # 'none', 'all' or 'selective' 
     
-    state['qdim'] = 5 #0 
+    state['qdim_encoder'] = 15 #0
+    state['qdim_decoder'] = 5 #0
     # Dimensionality of dialogue hidden layer 
     state['sdim'] = 10 # 0
     # Dimensionality of low-rank approximation
@@ -283,7 +285,8 @@ def prototype_movies():
     state['bs'] = 80 # If out of memory, modify this!
     state['decoder_bias_type'] = 'all' # Choose between 'first', 'all' and 'selective' 
 
-    state['qdim'] = 600
+    state['qdim_encoder'] = 600
+    state['qdim_decoder'] = 600
     # Dimensionality of dialogue hidden layer 
     state['sdim'] = 300
     # Dimensionality of low-rank approximation
