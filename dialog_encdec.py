@@ -74,8 +74,15 @@ class UtteranceEncoder(EncoderDecoderBase):
 
         if m_t.ndim >= 1:
             m_t = m_t.dimshuffle(0, 'x')
-         
-        hr_tm1 = m_t * h_tm1
+        
+        # If 'reset_utterance_encoder_at_end_of_utterance' flag is on,
+        # then reset the hidden state if this is an end-of-utterance token
+        # as given by m_t
+        if self.reset_utterance_encoder_at_end_of_utterance:
+            hr_tm1 = m_t * h_tm1
+        else:
+            hr_tm1 = h_tm1
+
         h_t = self.sent_rec_activation(T.dot(x_t, self.W_in) + T.dot(hr_tm1, self.W_hh) + self.b_hh)
 
         # Return hidden state only
@@ -87,8 +94,14 @@ class UtteranceEncoder(EncoderDecoderBase):
 
         if m_t.ndim >= 1:
             m_t = m_t.dimshuffle(0, 'x') 
-         
-        hr_tm1 = m_t * h_tm1
+
+        # If 'reset_utterance_encoder_at_end_of_utterance' flag is on,
+        # then reset the hidden state if this is an end-of-utterance token
+        # as given by m_t
+        if self.reset_utterance_encoder_at_end_of_utterance:
+            hr_tm1 = m_t * h_tm1
+        else:
+            hr_tm1 = h_tm1
 
         r_t = T.nnet.sigmoid(T.dot(x_t, self.W_in_r) + T.dot(hr_tm1, self.W_hh_r) + self.b_r)
         z_t = T.nnet.sigmoid(T.dot(x_t, self.W_in_z) + T.dot(hr_tm1, self.W_hh_z) + self.b_z)
@@ -442,7 +455,7 @@ class UtteranceDecoder(EncoderDecoderBase):
         # We only include the initial hidden state if the utterance decoder is NOT reset 
         # and if its NOT a collapsed model (i.e. collapsed to standard RNN). 
         # In the collapsed model, we always initialize hidden state to zero.
-        if (not self.collaps_to_standard_rnn) and (not self.never_reset_decoder):
+        if (not self.collaps_to_standard_rnn) and (self.reset_utterance_decoder_at_end_of_utterance):
             self.Wd_s_0 = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.complete_hidden_state_size), name='Wd_s_0'))
             self.bd_s_0 = add_to_params(self.params, theano.shared(value=np.zeros((self.complete_hidden_state_size,), dtype='float32'), name='bd_s_0'))
 
@@ -724,9 +737,9 @@ class UtteranceDecoder(EncoderDecoderBase):
         if m_t.ndim >= 1:
             m_t = m_t.dimshuffle(0, 'x')
 
-        # If model collapses to standard RNN, or the never_reset_decoder flag is on,
+        # If model collapses to standard RNN, or the 'reset_utterance_decoder_at_end_of_utterance' flag is off,
         # then never reset decoder. Otherwise, reset the decoder at every utterance turn.
-        if (not self.collaps_to_standard_rnn) and (not self.never_reset_decoder):
+        if (not self.collaps_to_standard_rnn) and (self.reset_utterance_decoder_at_end_of_utterance):
             hd_tm1 = (m_t) * hd_tm1 + (1 - m_t) * T.tanh(T.dot(decoder_inp_t, self.Wd_s_0) + self.bd_s_0)
 
         # Unlike the GRU gating function, the LSTM gating function needs to keep track of two vectors:
@@ -805,9 +818,9 @@ class UtteranceDecoder(EncoderDecoderBase):
         if m_t.ndim >= 1:
             m_t = m_t.dimshuffle(0, 'x')
 
-        # If model collapses to standard RNN, or the never_reset_decoder flag is on,
+        # If model collapses to standard RNN, or the 'reset_utterance_decoder_at_end_of_utterance' flag is off,
         # then never reset decoder. Otherwise, reset the decoder at every utterance turn.
-        if (not self.collaps_to_standard_rnn) and (not self.never_reset_decoder):
+        if (not self.collaps_to_standard_rnn) and (self.reset_utterance_decoder_at_end_of_utterance):
             hd_tm1 = (m_t) * hd_tm1 + (1 - m_t) * T.tanh(T.dot(decoder_inp_t, self.Wd_s_0) + self.bd_s_0)
 
         # ^ iff x_{t - 1} = </s> (m_t = 0) then x_{t - 1} = 0
@@ -857,9 +870,9 @@ class UtteranceDecoder(EncoderDecoderBase):
         if m_t.ndim >= 1:
             m_t = m_t.dimshuffle(0, 'x')
         
-        # If model collapses to standard RNN, or the never_reset_decoder flag is on,
+        # If model collapses to standard RNN, or the 'reset_utterance_decoder_at_end_of_utterance' flag is off,
         # then never reset decoder. Otherwise, reset the decoder at every utterance turn.
-        if (not self.collaps_to_standard_rnn) and (not self.never_reset_decoder):
+        if (not self.collaps_to_standard_rnn) and (self.reset_utterance_decoder_at_end_of_utterance):
             # We already assume that xd are zeroed out
             hd_tm1 = (m_t) * hd_tm1 + (1-m_t) * T.tanh(T.dot(decoder_inp_t, self.Wd_s_0) + self.bd_s_0)
 
@@ -1282,8 +1295,17 @@ class DialogEncoderDecoder(Model):
         if not 'collaps_to_standard_rnn' in state:
             state['collaps_to_standard_rnn'] = False
 
-        if not 'never_reset_decoder' in state:
-            state['never_reset_decoder'] = False
+        #if not 'never_reset_decoder' in state:
+        #    state['never_reset_decoder'] = False
+
+        if not 'reset_utterance_decoder_at_end_of_utterance' in state:
+            state['reset_utterance_decoder_at_end_of_utterance'] = True
+
+        if not 'reset_utterance_encoder_at_end_of_utterance' in state:
+            state['reset_utterance_encoder_at_end_of_utterance'] = True
+
+
+
 
         if not 'deep_dialogue_input' in state:
             state['deep_dialogue_input'] = True
