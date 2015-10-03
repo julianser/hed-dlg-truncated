@@ -96,10 +96,10 @@ def prototype_state():
     # If on, the utterance decoder will be reset after each end-of-utterance token
     # This replaces the previous configuration variable 'never_reset_decoder', by being
     # its opposite (negation).
-    state['reset_utterance_decoder_at_end_of_utterance'] = False #True
+    state['reset_utterance_decoder_at_end_of_utterance'] = True
 
     # If on, the utterance encoder will be reset after each end-of-utterance token
-    state['reset_utterance_encoder_at_end_of_utterance'] = False #True
+    state['reset_utterance_encoder_at_end_of_utterance'] = True
 
     # ----- SIZES ----
     # Dimensionality of hidden layers
