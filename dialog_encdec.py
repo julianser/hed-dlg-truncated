@@ -65,6 +65,7 @@ class UtteranceEncoder(EncoderDecoderBase):
             self.b_z = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim_encoder,), dtype='float32'), name='b_z'+self.name))
             self.b_r = add_to_params(self.params, theano.shared(value=np.zeros((self.qdim_encoder,), dtype='float32'), name='b_r'+self.name))
 
+    # This function takes as input word indices and extracts their corresponding word embeddings
     def approx_embedder(self, x):
         return self.W_emb[x]
 
@@ -140,6 +141,7 @@ class UtteranceEncoder(EncoderDecoderBase):
             assert 'prev_h' in kwargs 
             h_0 = kwargs['prev_h']
 
+        # We extract the word embeddings from the word indices
         xe = self.approx_embedder(x)
         if xmask == None:
             xmask = T.neq(x, self.eos_sym)
@@ -895,7 +897,7 @@ class UtteranceDecoder(EncoderDecoderBase):
             rd_sel_t = T.nnet.sigmoid(T.dot(xd_t, self.Wd_sel_e) + T.dot(hd_tm1, self.Wd_sel_h) + T.dot(decoder_inp_t, self.Wd_sel_s) + self.bd_sel)
             decoder_inpr_t = rd_sel_t * decoder_inp_t
              
-            hd_tilde = self.sent_rec_activation( T.dot(xd_t, self.Wd_in) \
+            hd_t = self.sent_rec_activation( T.dot(xd_t, self.Wd_in) \
                                         + T.dot(hd_tm1, self.Wd_hh) \
                                         + T.dot(decoder_inpr_t, self.Wd_s_q) \
                                         + self.bd_hh )
