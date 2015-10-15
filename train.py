@@ -68,13 +68,13 @@ def save(model, timings, post_fix = ''):
     
     print "Model saved, took {}".format(time.time() - start)
 
-def load(model, filename):
+def load(model, filename, parameter_strings_to_ignore):
     print "Loading the model..."
 
     # ignore keyboard interrupt while saving
     start = time.time()
     s = signal.signal(signal.SIGINT, signal.SIG_IGN)
-    model.load(filename)
+    model.load(filename, parameter_strings_to_ignore)
     signal.signal(signal.SIGINT, s)
 
     print "Model loaded, took {}".format(time.time() - start)
@@ -119,7 +119,16 @@ def main(args):
         filename = args.resume + '_model.npz'
         if os.path.isfile(filename):
             logger.debug("Loading previous model")
-            load(model, filename)
+
+            parameter_strings_to_ignore = []
+            if args.reinitialize_decoder_parameters:
+                parameter_strings_to_ignore += ['latent_utterance_prior']
+                parameter_strings_to_ignore += ['latent_utterance_approx_posterior']
+            if args.reinitialize_variational_parameters:
+                parameter_strings_to_ignore += ['Wd_']
+                parameter_strings_to_ignore += ['bd_']
+
+            load(model, filename, parameter_strings_to_ignore)
         else:
             raise Exception("Cannot resume, cannot find model file!")
         
@@ -263,14 +272,14 @@ def main(args):
         print 'cost', c
         print 'variational_cost', variational_cost
         print 'posterior_mean_variance', posterior_mean_variance
-        if variational_cost > 2:
-            print 'x_data', x_data
-            print 'x_data_reversed', x_data_reversed
-            print 'max_length', max_length
-            print 'x_cost_mask', x_cost_mask
-            print 'x_semantic', x_semantic
-            print 'x_reset', x_reset
-            print 'ran_cost_utterance', ran_cost_utterance[0:3, 0:3, 0:3]
+        #if variational_cost > 2:
+        #    print 'x_data', x_data
+        #    print 'x_data_reversed', x_data_reversed
+        #    print 'max_length', max_length
+        #    print 'x_cost_mask', x_cost_mask
+        #    print 'x_semantic', x_semantic
+        #    print 'x_reset', x_reset
+        #    print 'ran_cost_utterance', ran_cost_utterance[0:3, 0:3, 0:3]
 
 
 
@@ -480,6 +489,10 @@ def parse_args():
     parser.add_argument("--save_every_valid_iteration", action='store_true', help="If true, will save a copy of the model at every validation iteration.")
 
     parser.add_argument("--prototype", type=str, help="Use the prototype", default='prototype_state')
+
+    parser.add_argument("--reinitialize-variational-parameters", action='store_true', help="Can be used when resuming a model. If true, will initialize all variational parameters randomly instead of loading them from previous model.")
+
+    parser.add_argument("--reinitialize-decoder-parameters", action='store_true', help="Can be used when resuming a model. If true, will initialize all parameters of the utterance decoder randomly instead of loading them from previous model.")
 
     args = parser.parse_args()
     return args

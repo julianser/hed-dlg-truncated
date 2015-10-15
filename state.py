@@ -9,8 +9,8 @@ def prototype_state():
     # Logging level
     state['level'] = 'DEBUG'
 
+    # Out-of-vocabulary token string
     state['oov'] = '<unk>'
-    state['len_sample'] = 40
     
     # These are end-of-sequence marks
     state['end_sym_sentence'] = '</s>'
@@ -103,11 +103,13 @@ def prototype_state():
 
     # ----- SIZES ----
     # Dimensionality of hidden layers
+    # Dimensionality of (word-level) utterance encoder hidden state
     state['qdim_encoder'] = 512
+    # Dimensionality of (word-level) utterance decoder (RNN which generates output) hidden state
     state['qdim_decoder'] = 512
-    # Dimensionality of dialogue hidden layer 
+    # Dimensionality of (utterance-level) dialogue hidden layer 
     state['sdim'] = 1000
-    # Dimensionality of low-rank approximation
+    # Dimensionality of low-rank word embedding approximation
     state['rankdim'] = 256
 
     # ----- LATENT VARIABLES WITH VARIATIONAL LEARNING -----
@@ -133,6 +135,7 @@ def prototype_state():
 
     # Threshold to clip the gradient
     state['cutoff'] = 1.
+    # Learning rate. The rate 0.0001 seems to work well across many tasks.
     state['lr'] = 0.0001
 
     # Early stopping configuration
@@ -212,7 +215,7 @@ def prototype_test():
     # Validation frequency
     state['valid_freq'] = 50
 
-    state['collaps_to_standard_rnn'] = True
+    state['collaps_to_standard_rnn'] = False
     
     # Variables
     state['prefix'] = "testmodel_" 
@@ -220,13 +223,13 @@ def prototype_test():
     
     state['maxout_out'] = False
     state['deep_out'] = True
-    state['deep_dialogue_input'] = False
+    state['deep_dialogue_input'] = True
 
     state['utterance_encoder_gating'] = 'GRU'
     state['dialogue_encoder_gating'] = 'GRU'
     state['utterance_decoder_gating'] = 'GRU'
     state['bidirectional_utterance_encoder'] = True 
-    state['direct_connection_between_encoders_and_decoder'] = False
+    state['direct_connection_between_encoders_and_decoder'] = True
 
     # If out of memory, modify this!
     state['bs'] = 5
@@ -234,10 +237,10 @@ def prototype_test():
     state['use_nce'] = False
     state['decoder_bias_type'] = 'all' # 'none', 'all' or 'selective' 
     
-    state['qdim_encoder'] = 15 #0
-    state['qdim_decoder'] = 5 #0
+    state['qdim_encoder'] = 15
+    state['qdim_decoder'] = 5
     # Dimensionality of dialogue hidden layer 
-    state['sdim'] = 10 # 0
+    state['sdim'] = 10
     # Dimensionality of low-rank approximation
     state['rankdim'] = 10
     return state
@@ -301,10 +304,10 @@ def prototype_test_variational():
     state['use_nce'] = False
     state['decoder_bias_type'] = 'all' # 'none', 'all' or 'selective' 
     
-    state['qdim_encoder'] = 15 #0
-    state['qdim_decoder'] = 5 #0
+    state['qdim_encoder'] = 15
+    state['qdim_decoder'] = 5
     # Dimensionality of dialogue hidden layer 
-    state['sdim'] = 10 # 0
+    state['sdim'] = 10
     # Dimensionality of low-rank approximation
     state['rankdim'] = 10
     return state
@@ -353,7 +356,7 @@ def prototype_movies():
     
     # Model architecture
     state['bidirectional_utterance_encoder'] = True
-    state['add_latent_gaussian_per_utterance'] = False # True
+    state['add_latent_gaussian_per_utterance'] = False
     state['latent_gaussian_per_utterance_dim'] = 20
     state['deep_dialogue_input'] = True
     state['deep_out'] = True
