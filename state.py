@@ -120,6 +120,9 @@ def prototype_state():
     state['add_latent_gaussian_per_utterance'] = False
     # If on, will condition the latent variable on the dialogue encoder
     state['condition_latent_variable_on_dialogue_encoder'] = False
+    # If on, will condition the latent variable on the DCGM (mean pooling over words) encoder.
+    # This will replace the conditioning on the utterance encoder.
+    state['condition_latent_variable_on_dcgm_encoder'] = False
     # Dimensionality of Gaussian latent variable (under the assumption that covariance matrix is diagonal)
     state['latent_gaussian_per_utterance_dim'] = 10
     # If on, batch normalization will be applied to the MLP computing the prior and posterior of the latent variable.
@@ -268,9 +271,9 @@ def prototype_test_variational():
     state['bleu_context_length'] = 2
 
     # Handle pretrained word embeddings. Using this requires rankdim=10
-    state['initialize_from_pretrained_word_embeddings'] = True
+    state['initialize_from_pretrained_word_embeddings'] = False
     state['pretrained_word_embeddings_file'] = './tests/data/MT_WordEmb.pkl' 
-    state['fix_pretrained_word_embeddings'] = True
+    state['fix_pretrained_word_embeddings'] = False
     
     # Validation frequency
     state['valid_freq'] = 50
@@ -295,7 +298,7 @@ def prototype_test_variational():
     state['add_latent_gaussian_per_utterance'] = True
     state['latent_gaussian_per_utterance_dim'] = 5
     state['condition_latent_variable_on_dialogue_encoder'] = True
-
+    state['condition_latent_variable_on_dcgm_encoder'] = True
 
 
     # If out of memory, modify this!

@@ -194,6 +194,108 @@ class UtteranceEncoder(EncoderDecoderBase):
         self.init_params(word_embedding_param)
 
 
+class DCGMEncoder(EncoderDecoderBase):
+    def init_params(self, word_embedding_param):
+        # Initialzie W_emb to given word embeddings
+        assert(word_embedding_param != None)
+        self.W_emb = word_embedding_param
+        self.Wq_in = add_to_params(self.params, \
+                                   theano.shared(value=NormalInit(self.rng, self.rankdim, self.output_dim), name='dcgm_Wq_in'+self.name))
+        self.bq_in = add_to_params(self.params, \
+                                   theano.shared(value=np.zeros((self.output_dim,), dtype='float32'), name='dcgm_bq_in'+self.name))
+
+    def mean_step(self, x_t, m_t, *args):
+        args = iter(args)
+        
+        # already computed avg 
+        avg_past = next(args)
+        n_past = next(args)
+
+        if m_t.ndim >= 1:
+            m_t = m_t.dimshuffle(0, 'x') 
+        
+        # reset avg
+        avg_past_r = m_t * avg_past 
+        n_past_r = m_t.T * n_past
+
+
+        n = n_past_r + 1.
+
+        resized_n = T.repeat(n.T, avg_past_r.shape[1], axis=1)
+        avg = (avg_past_r * (resized_n - 1) + x_t) / resized_n
+
+        # Old implementation:
+        #avg = (avg_past_r * (n[:, None] - 1) + x_t) / n[:, None]
+
+        # return state and pooled state
+        return avg, n
+
+    def approx_embedder(self, x):
+        return self.W_emb[x]
+
+    def build_encoder(self, x, xmask=None, prev_state=None, **kwargs):
+        one_step = False
+        if len(kwargs):
+            one_step = True
+
+        if x.ndim == 2:
+            batch_size = x.shape[1]
+        else:
+            batch_size = 1
+
+        # if it is not one_step then we initialize everything to previous state or zero  
+        if not one_step:
+            if prev_state:
+                avg_0, n_0 = prev_state
+            else:
+                avg_0 = T.alloc(np.float32(0), batch_size, self.rankdim)
+                n_0 = T.alloc(np.float32(0), batch_size)
+
+        # in sampling mode (i.e. one step) we require 
+        else:
+            # in this case x.ndim != 2
+            assert x.ndim != 2
+            assert 'prev_avg' in kwargs 
+            avg_0 = kwargs['prev_avg']
+
+        
+        # in sampling mode (i.e. one step) we require 
+        xe = self.approx_embedder(x)
+        if xmask == None:
+            xmask = T.neq(x, self.eos_sym)
+
+        if xmask.ndim == 2:
+            ones_vector = T.ones_like(xmask[0,:]).dimshuffle('x', 0)
+            rolled_xmask = T.concatenate([ones_vector, xmask], axis=0)
+        else:
+            ones_scalar = theano.shared(value=numpy.ones((1), dtype='float32'), name='ones_scalar')
+            rolled_xmask = T.concatenate([ones_scalar, xmask])
+
+        f_enc = self.mean_step
+        o_enc_info = [avg_0, n_0] 
+
+
+
+       # Run through all the sentence (encode everything)
+        if not one_step: 
+            _res, _ = theano.scan(f_enc,
+                              sequences=[xe, rolled_xmask],\
+                              outputs_info=o_enc_info)
+        else: # Make just one step further
+            _res, _ = f_enc(xe, rolled_xmask, [avg_0, n_0])
+        
+        avg, n = _res[0], _res[1]
+
+        # Linear activation
+        avg_q = T.dot(avg, self.Wq_in) + self.bq_in
+        return avg_q, avg, n
+
+    def __init__(self, state, rng, word_embedding_param, output_dim, parent, name):
+        EncoderDecoderBase.__init__(self, state, rng, parent)
+        self.name = name
+        self.output_dim = output_dim
+        self.init_params(word_embedding_param)
+
 class DialogEncoder(EncoderDecoderBase):
     def init_params(self):
         """ Context weights """
@@ -1306,9 +1408,6 @@ class DialogEncoderDecoder(Model):
         if not 'reset_utterance_encoder_at_end_of_utterance' in state:
             state['reset_utterance_encoder_at_end_of_utterance'] = True
 
-
-
-
         if not 'deep_dialogue_input' in state:
             state['deep_dialogue_input'] = True
 
@@ -1321,12 +1420,20 @@ class DialogEncoderDecoder(Model):
            state['latent_gaussian_per_utterance_dim'] = 1
         if not 'condition_latent_variable_on_dialogue_encoder' in state:
            state['condition_latent_variable_on_dialogue_encoder'] = True
+        if not 'condition_latent_variable_on_dcgm_encoder' in state:
+           state['condition_latent_variable_on_dcgm_encoder'] = False
         if not 'scale_latent_variable_variances' in state:
            state['scale_latent_variable_variances'] = 0.01
         if not 'condition_decoder_only_on_latent_variable' in state:
            state['condition_decoder_only_on_latent_variable'] = False
         if not 'train_latent_gaussians_with_batch_normalization' in state:
            state['train_latent_gaussians_with_batch_normalization'] = False
+
+        if state['condition_latent_variable_on_dialogue_encoder']:
+            assert state['add_latent_gaussian_per_utterance']
+
+        if state['condition_latent_variable_on_dcgm_encoder']:
+            assert state['add_latent_gaussian_per_utterance']
 
         self.state = state
         self.global_params = []
@@ -1436,7 +1543,9 @@ class DialogEncoderDecoder(Model):
             self.platent_utterance_variable_prior = theano.shared(value=numpy.zeros((self.bs, self.latent_gaussian_per_utterance_dim), dtype='float32'), name='platent_utterance_variable_prior')
             self.platent_utterance_variable_approx_posterior = theano.shared(value=numpy.zeros((self.bs, self.latent_gaussian_per_utterance_dim), dtype='float32'), name='platent_utterance_variable_approx_posterior')
 
-
+            if self.condition_latent_variable_on_dcgm_encoder:
+                self.platent_dcgm_avg = theano.shared(value=numpy.zeros((self.bs, self.rankdim), dtype='float32'), name='platent_dcgm_avg')
+                self.platent_dcgm_n = theano.shared(value=numpy.zeros((1, self.bs), dtype='float32'), name='platent_dcgm_n')
 
 
         # Build utterance encoders
@@ -1490,7 +1599,7 @@ class DialogEncoderDecoder(Model):
             self.latent_utterance_variable_prior_var = _prior_out[2]
 
             logger.debug("Initializing approximate posterior encoder for utterance-level latent variable")
-            if self.bidirectional_utterance_encoder:
+            if self.bidirectional_utterance_encoder and not self.condition_latent_variable_on_dcgm_encoder:
                 posterior_input_size = self.sdim + self.qdim_encoder*2
             else:
                 posterior_input_size = self.sdim + self.qdim_encoder
@@ -1502,7 +1611,20 @@ class DialogEncoderDecoder(Model):
             else:
                 self.utterance_encoder_reverser = DialogLevelReverser(self.state, self.qdim_encoder*2, self.rng, self)
 
-            self.h_future = self.utterance_encoder_reverser.build_encoder( \
+            if self.condition_latent_variable_on_dcgm_encoder:
+                logger.debug("Initializing dcgm encoder for conditioning input to the utterance-level latent variable")
+
+                self.dcgm_encoder = DCGMEncoder(self.state, self.rng, self.W_emb, self.qdim_encoder, self, 'latent_dcgm_encoder')
+                logger.debug("Build dcgm encoder")
+                latent_dcgm_res, self.latent_dcgm_avg, self.latent_dcgm_n = res_dcgm_encoder = self.dcgm_encoder.build_encoder(training_x, xmask=training_hs_mask, prev_state=[self.platent_dcgm_avg, self.platent_dcgm_n])
+
+                self.h_future = self.utterance_encoder_reverser.build_encoder( \
+                                     latent_dcgm_res, \
+                                     training_x, \
+                                     xmask=training_hs_mask)
+
+            else:
+                self.h_future = self.utterance_encoder_reverser.build_encoder( \
                                      self.h, \
                                      training_x, \
                                      xmask=training_hs_mask)
@@ -1635,6 +1757,13 @@ class DialogEncoderDecoder(Model):
                 self.params = self.global_params + self.utterance_encoder.params + self.dialog_encoder.params + self.utterance_decoder.params
                 assert len(set(self.params)) == (len(self.global_params) + len(self.utterance_encoder.params) + len(self.dialog_encoder.params) + len(self.utterance_decoder.params))
 
+        if self.add_latent_gaussian_per_utterance:
+            self.params += self.latent_utterance_variable_prior_encoder.params
+            self.params += self.latent_utterance_variable_approx_posterior_encoder.params
+
+            if self.condition_latent_variable_on_dcgm_encoder:
+                self.params += self.dcgm_encoder.params
+
         self.updates = self.compute_updates(self.training_cost / training_x.shape[1], self.params)
 
         # Truncate gradients properly by bringing forward previous states
@@ -1663,6 +1792,10 @@ class DialogEncoderDecoder(Model):
         if self.add_latent_gaussian_per_utterance:
             self.state_updates.append((self.platent_utterance_variable_prior, x_reset * self.latent_utterance_variable_prior[-1]))
             self.state_updates.append((self.platent_utterance_variable_approx_posterior, x_reset * self.latent_utterance_variable_approx_posterior[-1]))
+
+            if self.condition_latent_variable_on_dcgm_encoder:
+                self.state_updates.append((self.platent_dcgm_avg, x_reset * self.latent_dcgm_avg[-1]))
+                self.state_updates.append((self.platent_dcgm_n, x_reset.T * self.latent_dcgm_n[-1]))
 
 
         # Beam-search variables

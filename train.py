@@ -141,7 +141,11 @@ def main(args):
 
     logger.debug("Compile trainer")
     if not state["use_nce"]:
-        logger.debug("Training with exact log-likelihood")
+        if ('add_latent_gaussian_per_utterance' in state) and (state["add_latent_gaussian_per_utterance"]):
+            logger.debug("Training using variational lower bound on log-likelihood")
+        else:
+            logger.debug("Training using exact log-likelihood")
+
         train_batch = model.build_train_function()
     else:
         logger.debug("Training with noise contrastive estimation")
