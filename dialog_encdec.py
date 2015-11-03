@@ -1233,7 +1233,7 @@ class DialogEncoderDecoder(Model):
         elif self.updater == 'rmsprop':
             updates = RMSProp(grads, self.lr)
         elif self.updater == 'adam':
-            updates = Adam(grads)
+            updates = Adam(grads, self.lr)
         else:
             raise Exception("Updater not understood!") 
 
@@ -1665,7 +1665,8 @@ class DialogEncoderDecoder(Model):
                    - T.sum(T.log(self.latent_utterance_variable_approx_posterior_var), axis=2)          \
                   ) / 2
 
-            self.variational_cost = T.sum(kl_divergences_between_prior_and_posterior * self.x_cost_mask[1:self.x_max_length]) * (T.sum(T.eq(training_x, self.eos_sym)) / (T.sum(training_x_cost_mask)))
+            #self.variational_cost = T.sum(kl_divergences_between_prior_and_posterior * self.x_cost_mask[1:self.x_max_length]) * (T.sum(T.eq(training_x, self.eos_sym)) / (T.sum(training_x_cost_mask)))
+            self.variational_cost = T.sum(kl_divergences_between_prior_and_posterior * T.eq(training_x, self.eos_sym))
 
             self.tmp_normalizing_constant_a = T.sum(T.eq(training_x, self.eos_sym)) 
             self.tmp_normalizing_constant_b = T.sum(training_x_cost_mask)

@@ -136,15 +136,6 @@ def prototype_state():
     # If on, the utterance decoder will ONLY be conditioned on the Gaussian latent variable.
     state['condition_decoder_only_on_latent_variable'] = False
 
-    # Threshold to clip the gradient
-    state['cutoff'] = 1.
-    # Learning rate. The rate 0.0001 seems to work well across many tasks.
-    state['lr'] = 0.0001
-
-    # Early stopping configuration
-    state['patience'] = 20
-    state['cost_threshold'] = 1.003
-
     # Initialization configuration
     state['initialize_from_pretrained_word_embeddings'] = False
     state['pretrained_word_embeddings_file'] = ''
@@ -152,7 +143,18 @@ def prototype_state():
 
     # ----- TRAINING METHOD -----
     # Choose optimization algorithm
-    state['updater'] = 'adam'  
+    state['updater'] = 'adam'
+
+    # Threshold to clip the gradient
+    state['cutoff'] = 1.
+    # Learning rate. The rate 0.0002 seems to work well across many tasks with adam.
+    # Alternatively, the learning rate can be adjusted down (e.g. 0.00004) 
+    # to at the end of training to help the model converge well.
+    state['lr'] = 0.0002
+
+    # Early stopping configuration
+    state['patience'] = 20
+    state['cost_threshold'] = 1.003
 
     # Batch size
     state['bs'] = 80
@@ -267,13 +269,13 @@ def prototype_test_variational():
     state['max_grad_steps'] = 20
     
     # Handle bleu evaluation
-    state['bleu_evaluation'] = "./tests/bleu/bleu_evaluation"
-    state['bleu_context_length'] = 2
+    #state['bleu_evaluation'] = "./tests/bleu/bleu_evaluation"
+    #state['bleu_context_length'] = 2
 
     # Handle pretrained word embeddings. Using this requires rankdim=10
-    state['initialize_from_pretrained_word_embeddings'] = False
+    state['initialize_from_pretrained_word_embeddings'] = True
     state['pretrained_word_embeddings_file'] = './tests/data/MT_WordEmb.pkl' 
-    state['fix_pretrained_word_embeddings'] = False
+    state['fix_pretrained_word_embeddings'] = True
     
     # Validation frequency
     state['valid_freq'] = 50
