@@ -273,9 +273,14 @@ def main(args):
         else:
             c, variational_cost, posterior_mean_variance = train_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance)
 
-        print 'cost', c
-        print 'variational_cost', variational_cost
+        print 'cost_sum', c
+        print 'cost_mean', c / float(numpy.sum(x_cost_mask))
+        print 'variational_cost_sum', variational_cost
+        print 'variational_cost_mean', variational_cost / float(len(numpy.where(x_data == model.eos_sym)[0]))
         print 'posterior_mean_variance', posterior_mean_variance
+
+
+
         #if variational_cost > 2:
         #    print 'x_data', x_data
         #    print 'x_data_reversed', x_data_reversed
@@ -358,6 +363,14 @@ def main(args):
 
             print 'std greater than mean', numpy.where(numpy.std(gradients_wrt_softmax, axis=0) > numpy.abs(numpy.mean(gradients_wrt_softmax, axis=0)))[0].shape[0]
 
+            Wd_s_q = model.utterance_decoder.Wd_s_q.get_value()
+
+            print 'Wd_s_q all', numpy.sum(numpy.abs(Wd_s_q)), numpy.mean(numpy.abs(Wd_s_q))
+            print 'Wd_s_q latent', numpy.sum(numpy.abs(Wd_s_q[(Wd_s_q.shape[0]-state['latent_gaussian_per_utterance_dim']):Wd_s_q.shape[0], :])), numpy.mean(numpy.abs(Wd_s_q[(Wd_s_q.shape[0]-state['latent_gaussian_per_utterance_dim']):Wd_s_q.shape[0], :]))
+
+            print 'Wd_s_q ratio', (numpy.sum(numpy.abs(Wd_s_q[(Wd_s_q.shape[0]-state['latent_gaussian_per_utterance_dim']):Wd_s_q.shape[0], :])) / numpy.sum(numpy.abs(Wd_s_q)))
+
+
         #print 'tmp_normalizing_constant_a', tmp_normalizing_constant_a
         #print 'tmp_normalizing_constant_b', tmp_normalizing_constant_b
         #print 'tmp_c', tmp_c.shape, tmp_c
@@ -366,12 +379,7 @@ def main(args):
         #print 'grads_wrt_softmax', grads_wrt_softmax.shape, numpy.sum(numpy.abs(grads_wrt_softmax)), numpy.abs(grads_wrt_softmax[0:5,0:5])
         #print 'grads_wrt_variational_cost', grads_wrt_variational_cost.shape, numpy.sum(numpy.abs(grads_wrt_variational_cost)), numpy.abs(grads_wrt_variational_cost[0:5,0:5])
 
-        #Wd_s_q = model.utterance_decoder.Wd_s_q.get_value()
 
-        #print 'Wd_s_q all', numpy.sum(numpy.abs(Wd_s_q)), numpy.mean(numpy.abs(Wd_s_q))
-        #print 'Wd_s_q latent', numpy.sum(numpy.abs(Wd_s_q[(Wd_s_q.shape[0]-state['latent_gaussian_per_utterance_dim']):Wd_s_q.shape[0], :])), numpy.mean(numpy.abs(Wd_s_q[(Wd_s_q.shape[0]-state['latent_gaussian_per_utterance_dim']):Wd_s_q.shape[0], :]))
-
-        #print 'Wd_s_q ratio', (numpy.sum(numpy.abs(Wd_s_q[(Wd_s_q.shape[0]-state['latent_gaussian_per_utterance_dim']):Wd_s_q.shape[0], :])) / numpy.sum(numpy.abs(Wd_s_q)))
 
         # Only start validation loop once it's time to validate and once all previous batches have been reset
         if start_validation and is_end_of_batch:
@@ -441,7 +449,7 @@ def main(args):
                     valid_posterior_mean_variance += posterior_mean_variance
 
                     print 'valid_cost', valid_cost
-                    print 'valid_variational_cost', valid_variational_cost
+                    print 'valid_variational_cost sample', variational_cost
                     print 'posterior_mean_variance', posterior_mean_variance
 
 

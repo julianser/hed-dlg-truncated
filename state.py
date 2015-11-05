@@ -141,6 +141,10 @@ def prototype_state():
     state['pretrained_word_embeddings_file'] = ''
     state['fix_pretrained_word_embeddings'] = False
 
+    # If on, will fix the parameters of the utterance encoder and dialogue encoder RNNs,
+    # as well as the word embeddings. NOT APPLICABLE when collaps_to_standard_rnn is on.
+    state['fix_encoder_parameters'] = False
+
     # ----- TRAINING METHOD -----
     # Choose optimization algorithm
     state['updater'] = 'adam'
@@ -213,9 +217,9 @@ def prototype_test():
     state['bleu_context_length'] = 2
 
     # Handle pretrained word embeddings. Using this requires rankdim=10
-    state['initialize_from_pretrained_word_embeddings'] = True
+    state['initialize_from_pretrained_word_embeddings'] = False
     state['pretrained_word_embeddings_file'] = './tests/data/MT_WordEmb.pkl' 
-    state['fix_pretrained_word_embeddings'] = True
+    state['fix_pretrained_word_embeddings'] = False
     
     # Validation frequency
     state['valid_freq'] = 50

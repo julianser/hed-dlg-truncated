@@ -1218,9 +1218,13 @@ class DialogEncoderDecoder(Model):
         grads = OrderedDict(clip_grads)
 
         if self.initialize_from_pretrained_word_embeddings and self.fix_pretrained_word_embeddings:
+            assert not self.fix_encoder_parameters
             # Keep pretrained word embeddings fixed
             logger.debug("Will use mask to fix pretrained word embeddings")
             grads[self.W_emb] = grads[self.W_emb] * self.W_emb_pretrained_mask
+        elif self.fix_encoder_parameters:
+            # If 'fix_encoder_parameters' is on, the word embeddings will be excluded from parameter training set
+            logger.debug("Will fix word embeddings to initial embeddings or embeddings from resumed model")
         else:
             logger.debug("Will train all word embeddings")
 
@@ -1413,6 +1417,12 @@ class DialogEncoderDecoder(Model):
 
         if not 'reset_hidden_states_between_subsequences' in state:
             state['reset_hidden_states_between_subsequences'] = False
+
+        if not 'fix_encoder_parameters' in state:
+            state['fix_encoder_parameters'] = False
+        else:
+            if 'collaps_to_standard_rnn':
+                assert state['collaps_to_standard_rnn'] == False
 
         if not 'add_latent_gaussian_per_utterance' in state:
            state['add_latent_gaussian_per_utterance'] = False
@@ -1646,7 +1656,7 @@ class DialogEncoderDecoder(Model):
             self.latent_utterance_variable_approx_posterior_mean = _posterior_out[1]
             self.latent_utterance_variable_approx_posterior_var = _posterior_out[2]
 
-            self.latent_utterance_variable_approx_posterior_mean_var = T.sum(T.mean(self.latent_utterance_variable_approx_posterior_var,axis=2)) / T.sum(training_x_cost_mask)
+            self.latent_utterance_variable_approx_posterior_mean_var = T.sum(T.mean(self.latent_utterance_variable_approx_posterior_var,axis=2)) / T.sum(T.eq(training_x, self.eos_sym))
 # * self.x_cost_mask[1:self.x_max_length]) * (T.sum(T.eq(training_x, self.eos_sym)) / (T.sum(training_x_cost_mask)))
 
             # Sample utterance latent variable from posterior
@@ -1759,13 +1769,40 @@ class DialogEncoderDecoder(Model):
                 assert len(set(self.params)) == (len(self.global_params) + len(self.utterance_encoder.params) + len(self.dialog_encoder.params) + len(self.utterance_decoder.params))
 
         if self.add_latent_gaussian_per_utterance:
+            assert len(set(self.params)) + len(set(self.latent_utterance_variable_prior_encoder.params)) \
+                == len(set(self.params+self.latent_utterance_variable_prior_encoder.params))
             self.params += self.latent_utterance_variable_prior_encoder.params
+            assert len(set(self.params)) + len(set(self.latent_utterance_variable_approx_posterior_encoder.params)) \
+                == len(set(self.params+self.latent_utterance_variable_approx_posterior_encoder.params))
             self.params += self.latent_utterance_variable_approx_posterior_encoder.params
 
             if self.condition_latent_variable_on_dcgm_encoder:
+                assert len(set(self.params)) + len(set(self.dcgm_encoder.params)) \
+                    == len(set(self.params+self.dcgm_encoder.params))
                 self.params += self.dcgm_encoder.params
 
-        self.updates = self.compute_updates(self.training_cost / training_x.shape[1], self.params)
+        # Create set of parameters to train
+        self.params_to_train = []
+
+        if self.fix_encoder_parameters:
+            # If the option fix_encoder_parameters is on, then we exclude all parameters 
+            # related to the utterance encoder(s) and dialogue encoder, including the word embeddings,
+            # from the parameter training set.
+            if self.bidirectional_utterance_encoder:
+                self.params_to_exclude = self.global_params + self.utterance_encoder_forward.params + self.utterance_encoder_backward.params + self.dialog_encoder.params
+            else:
+                self.params_to_exclude = self.global_params + self.utterance_encoder.params + self.dialog_encoder.params
+
+            for param in self.params:
+                if not param in self.params_to_exclude:
+                    self.params_to_train += [param]
+
+
+        else:
+            # Otherwise, include all parameters in the set of training parameters.
+            self.params_to_train = self.params
+
+        self.updates = self.compute_updates(self.training_cost / training_x.shape[1], self.params_to_train)
 
         # Truncate gradients properly by bringing forward previous states
         # First, create reset mask
