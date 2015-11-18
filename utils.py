@@ -205,8 +205,23 @@ def SoftMax(x):
     return x / T.sum(x, axis=x.ndim-1, keepdims=True)
 
 # Does batch normalization of input variable
-def VariableNormalization(x, axes = 0):
-    return (x - T.mean(x, axis=axes)) / T.sqrt(T.var(x, axis=axes) + 0.0000001)
+def VariableNormalization(x, mask=None, axes=0):
+    if mask:
+         mask = mask.dimshuffle(0, 1, 'x')
+         x_masked = x*mask
+
+         average = T.sum(x_masked, axis=axes)/T.sum(mask, axis=axes)
+         if average.ndim == 1:
+             x_zero_average = x_masked - average.dimshuffle('x', 'x', 0)
+         else:
+             x_zero_average = x_masked - average.dimshuffle('x', 0)
+
+         x_std = T.sqrt(T.sum(x_zero_average**2)/T.sum(mask, axis=axes) + 0.0000001)
+         return x_zero_average / x_std
+    else:
+         return (x - T.mean(x, axis=axes)) / T.sqrt(T.var(x, axis=axes) + 0.0000001)
+
+
 
 
 

@@ -305,7 +305,7 @@ def prototype_test_variational():
     state['latent_gaussian_per_utterance_dim'] = 5
     state['condition_latent_variable_on_dialogue_encoder'] = True
     state['condition_latent_variable_on_dcgm_encoder'] = True
-
+    state['train_latent_gaussians_with_batch_normalization'] = True
 
     # If out of memory, modify this!
     state['bs'] = 5

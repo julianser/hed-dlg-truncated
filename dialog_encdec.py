@@ -1035,11 +1035,11 @@ class DialogLevelLatentEncoder(EncoderDecoderBase):
         hs_t = (m_t) * hs_tm1 + (1 - m_t) * h_t
         return hs_t
 
-    def build_encoder(self, h, x, xmask=None, prev_state=None, **kwargs):
+    def build_encoder(self, h, x, xmask=None, latent_variable_mask=None, prev_state=None, **kwargs):
         one_step = False
         if len(kwargs):
             one_step = True
-         
+
         # if x.ndim == 2 then 
         # x = (n_steps, batch_size)
         if x.ndim == 2:
@@ -1070,9 +1070,11 @@ class DialogLevelLatentEncoder(EncoderDecoderBase):
         f_hier = self.plain_dialogue_step
         o_hier_info = [hs_0]
 
-        if self.train_latent_gaussians_with_batch_normalization:
-            transformed_h = self.dialogue_rec_activation(VariableNormalization(T.dot(h, self.Wl_deep_input) + self.bl_deep_input, [0, 1]))
-            h_out = self.dialogue_rec_activation(VariableNormalization(T.dot(transformed_h, self.Wl_in) + self.bl_in, [0, 1]))
+        if self.train_latent_gaussians_with_batch_normalization and latent_variable_mask:
+            #transformed_h = self.dialogue_rec_activation(VariableNormalization(T.dot(h, self.Wl_deep_input) + self.bl_deep_input, axes=[0, 1]))
+            #h_out = self.dialogue_rec_activation(VariableNormalization(T.dot(transformed_h, self.Wl_in) + self.bl_in, axes=[0, 1]))
+            transformed_h = self.dialogue_rec_activation(VariableNormalization(T.dot(h, self.Wl_deep_input) + self.bl_deep_input, mask=latent_variable_mask, axes=[0, 1]))
+            h_out = self.dialogue_rec_activation(VariableNormalization(T.dot(transformed_h, self.Wl_in) + self.bl_in, mask=latent_variable_mask, axes=[0, 1]))
         else:
             transformed_h = self.dialogue_rec_activation(T.dot(h, self.Wl_deep_input) + self.bl_deep_input)
             h_out = self.dialogue_rec_activation(T.dot(transformed_h, self.Wl_in) + self.bl_in)
@@ -1501,7 +1503,8 @@ class DialogEncoderDecoder(Model):
 
         # Here we find the end-of-sentence tokens in the minibatch.
         training_hs_mask = T.neq(training_x, self.eos_sym)
-        training_x_cost_mask = self.x_cost_mask[1:self.x_max_length].flatten()
+        training_x_cost_mask = self.x_cost_mask[1:self.x_max_length]
+        training_x_cost_mask_flat = training_x_cost_mask.flatten()
         
         # Backward compatibility
         if 'decoder_bias_type' in self.state:
@@ -1591,6 +1594,10 @@ class DialogEncoderDecoder(Model):
         # We initialize the stochastic "latent" variables
         # platent_utterance_variable_prior
         if self.add_latent_gaussian_per_utterance:
+            # First compute mask over latent Gaussian variables. 
+            # One means that a variable is part of the computational graph and zero that it's not.
+            latent_variable_mask = T.eq(training_x, self.eos_sym) * training_x_cost_mask
+
             logger.debug("Initializing prior encoder for utterance-level latent variable")
             # We consider two kinds of prior: one case where the latent variable is 
             # conditioned on the dialogue encoder, and one case where it is not conditioned on anything
@@ -1602,7 +1609,7 @@ class DialogEncoderDecoder(Model):
             self.latent_utterance_variable_prior_encoder = DialogLevelLatentEncoder(self.state, self.sdim, self.latent_gaussian_per_utterance_dim, self.rng, self, 'latent_utterance_prior')
 
             logger.debug("Build prior encoder for utterance-level latent variable")
-            _prior_out = self.latent_utterance_variable_prior_encoder.build_encoder(self.hs_to_condition_latent_variable_on, training_x, xmask=training_hs_mask, prev_state=self.platent_utterance_variable_prior)
+            _prior_out = self.latent_utterance_variable_prior_encoder.build_encoder(self.hs_to_condition_latent_variable_on, training_x, xmask=training_hs_mask, latent_variable_mask=latent_variable_mask, prev_state=self.platent_utterance_variable_prior)
 
             self.latent_utterance_variable_prior = _prior_out[0]
             self.latent_utterance_variable_prior_mean = _prior_out[1]
@@ -1651,13 +1658,16 @@ class DialogEncoderDecoder(Model):
                                      self.hs_and_h_future, \
                                      training_x, \
                                      xmask=training_hs_mask, \
+                                     latent_variable_mask=latent_variable_mask, \
                                      prev_state=self.platent_utterance_variable_approx_posterior)
             self.latent_utterance_variable_approx_posterior = _posterior_out[0]
             self.latent_utterance_variable_approx_posterior_mean = _posterior_out[1]
             self.latent_utterance_variable_approx_posterior_var = _posterior_out[2]
 
-            self.latent_utterance_variable_approx_posterior_mean_var = T.sum(T.mean(self.latent_utterance_variable_approx_posterior_var,axis=2)) / T.sum(T.eq(training_x, self.eos_sym))
-# * self.x_cost_mask[1:self.x_max_length]) * (T.sum(T.eq(training_x, self.eos_sym)) / (T.sum(training_x_cost_mask)))
+
+
+            self.latent_utterance_variable_approx_posterior_mean_var = T.sum(T.mean(self.latent_utterance_variable_approx_posterior_var,axis=2)*latent_variable_mask) / T.sum(latent_variable_mask)
+# * self.x_cost_mask[1:self.x_max_length]) * (T.sum(T.eq(training_x, self.eos_sym)) / (T.sum(training_x_cost_mask_flat)))
 
             # Sample utterance latent variable from posterior
             self.posterior_sample = self.ran_cost_utterance[:(self.x_max_length-1)] * T.sqrt(self.latent_utterance_variable_approx_posterior_var) + self.latent_utterance_variable_approx_posterior_mean
@@ -1675,11 +1685,11 @@ class DialogEncoderDecoder(Model):
                    - T.sum(T.log(self.latent_utterance_variable_approx_posterior_var), axis=2)          \
                   ) / 2
 
-            #self.variational_cost = T.sum(kl_divergences_between_prior_and_posterior * self.x_cost_mask[1:self.x_max_length]) * (T.sum(T.eq(training_x, self.eos_sym)) / (T.sum(training_x_cost_mask)))
-            self.variational_cost = T.sum(kl_divergences_between_prior_and_posterior * T.eq(training_x, self.eos_sym))
+            #self.variational_cost = T.sum(kl_divergences_between_prior_and_posterior * self.x_cost_mask[1:self.x_max_length]) * (T.sum(T.eq(training_x, self.eos_sym)) / (T.sum(training_x_cost_mask_flat)))
+            self.variational_cost = T.sum(kl_divergences_between_prior_and_posterior * latent_variable_mask)
 
-            self.tmp_normalizing_constant_a = T.sum(T.eq(training_x, self.eos_sym)) 
-            self.tmp_normalizing_constant_b = T.sum(training_x_cost_mask)
+            self.tmp_normalizing_constant_a = T.sum(latent_variable_mask) 
+            self.tmp_normalizing_constant_b = T.sum(training_x_cost_mask_flat)
 
         else:
             self.variational_cost = theano.shared(value=numpy.float(0))
@@ -1730,12 +1740,12 @@ class DialogEncoderDecoder(Model):
             target_probs, self.hd, self.utterance_decoder_states, target_probs_full_matrix = self.utterance_decoder.build_decoder(self.hd_input, training_x, xmask=training_hs_mask, y=training_y, mode=UtteranceDecoder.EVALUATION, prev_state=self.phd)
 
         # Prediction cost and rank cost
-        self.contrastive_cost = T.sum(contrastive_cost.flatten() * training_x_cost_mask)
-        self.softmax_cost = -T.log(target_probs) * training_x_cost_mask
+        self.contrastive_cost = T.sum(contrastive_cost.flatten() * training_x_cost_mask_flat)
+        self.softmax_cost = -T.log(target_probs) * training_x_cost_mask_flat
         self.softmax_cost_acc = T.sum(self.softmax_cost)
 
         # Prediction accuracy
-        self.training_misclassification = T.neq(T.argmax(target_probs_full_matrix, axis=2), training_y).flatten() * training_x_cost_mask
+        self.training_misclassification = T.neq(T.argmax(target_probs_full_matrix, axis=2), training_y).flatten() * training_x_cost_mask_flat
 
         self.training_misclassification_acc = T.sum(self.training_misclassification)
 
