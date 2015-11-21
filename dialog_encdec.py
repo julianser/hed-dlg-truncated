@@ -1440,12 +1440,18 @@ class DialogEncoderDecoder(Model):
            state['condition_decoder_only_on_latent_variable'] = False
         if not 'train_latent_gaussians_with_batch_normalization' in state:
            state['train_latent_gaussians_with_batch_normalization'] = False
+        if not state['train_latent_gaussians_with_kl_divergence_annealing']:
+           state['train_latent_gaussians_with_kl_divergence_annealing'] = False
 
         if state['condition_latent_variable_on_dialogue_encoder']:
             assert state['add_latent_gaussian_per_utterance']
 
         if state['condition_latent_variable_on_dcgm_encoder']:
             assert state['add_latent_gaussian_per_utterance']
+
+        if state['train_latent_gaussians_with_kl_divergence_annealing']:
+            assert state['add_latent_gaussian_per_utterance']
+            assert state['kl_divergence_annealing_rate']
 
         self.state = state
         self.global_params = []
@@ -1666,7 +1672,7 @@ class DialogEncoderDecoder(Model):
 
 
 
-            self.latent_utterance_variable_approx_posterior_mean_var = T.sum(T.mean(self.latent_utterance_variable_approx_posterior_var,axis=2)*latent_variable_mask) / T.sum(latent_variable_mask)
+            self.latent_utterance_variable_approx_posterior_mean_var = T.sum(T.mean(self.latent_utterance_variable_approx_posterior_var,axis=2)*latent_variable_mask) / (T.sum(latent_variable_mask) + 0.0000001)
 # * self.x_cost_mask[1:self.x_max_length]) * (T.sum(T.eq(training_x, self.eos_sym)) / (T.sum(training_x_cost_mask_flat)))
 
             # Sample utterance latent variable from posterior
@@ -1754,8 +1760,16 @@ class DialogEncoderDecoder(Model):
         if self.use_nce:
             self.training_cost = self.contrastive_cost
 
+        # Compute training cost as variational lower bound with possible annealing of KL-divergence term
         if self.add_latent_gaussian_per_utterance:
-            self.training_cost += self.variational_cost
+            if self.train_latent_gaussians_with_kl_divergence_annealing:
+                self.evaluation_cost = self.training_cost + self.variational_cost
+
+                self.variational_cost_weight = add_to_params(self.global_params, theano.shared(value=numpy.float32(0), name='variational_cost_weight'))
+                self.training_cost = self.training_cost + self.variational_cost_weight*self.variational_cost
+            else:
+                self.training_cost += self.variational_cost
+                self.evaluation_cost = self.training_cost
 
             # Compute gradient of utterance decoder Wd_hh for debugging purposes
             self.grads_wrt_softmax_cost = T.grad(self.softmax_cost_acc, self.utterance_decoder.Wd_hh)
@@ -1763,8 +1777,9 @@ class DialogEncoderDecoder(Model):
                 self.grads_wrt_variational_cost = T.grad(self.variational_cost, self.utterance_encoder_forward.W_in)
             else:
                 self.grads_wrt_variational_cost = T.grad(self.variational_cost, self.utterance_encoder.W_in)
+        else:
+            self.evaluation_cost = self.training_cost
 
-        self.evaluation_cost = self.training_cost
 
         # Init params
         if self.collaps_to_standard_rnn:
@@ -1793,7 +1808,7 @@ class DialogEncoderDecoder(Model):
 
         # Create set of parameters to train
         self.params_to_train = []
-
+        self.params_to_exclude = []
         if self.fix_encoder_parameters:
             # If the option fix_encoder_parameters is on, then we exclude all parameters 
             # related to the utterance encoder(s) and dialogue encoder, including the word embeddings,
@@ -1803,14 +1818,16 @@ class DialogEncoderDecoder(Model):
             else:
                 self.params_to_exclude = self.global_params + self.utterance_encoder.params + self.dialog_encoder.params
 
-            for param in self.params:
-                if not param in self.params_to_exclude:
-                    self.params_to_train += [param]
+        if self.add_latent_gaussian_per_utterance:
+            # We always need to exclude the KL-divergence term weight from training,
+            # since this value is being annealed (and should therefore not be optimized with SGD)
+            if self.train_latent_gaussians_with_kl_divergence_annealing:
+                self.params_to_exclude += [self.variational_cost_weight]
 
+        for param in self.params:
+            if not param in self.params_to_exclude:
+                self.params_to_train += [param]
 
-        else:
-            # Otherwise, include all parameters in the set of training parameters.
-            self.params_to_train = self.params
 
         self.updates = self.compute_updates(self.training_cost / training_x.shape[1], self.params_to_train)
 
@@ -1844,6 +1861,9 @@ class DialogEncoderDecoder(Model):
             if self.condition_latent_variable_on_dcgm_encoder:
                 self.state_updates.append((self.platent_dcgm_avg, x_reset * self.latent_dcgm_avg[-1]))
                 self.state_updates.append((self.platent_dcgm_n, x_reset.T * self.latent_dcgm_n[-1]))
+
+            if self.train_latent_gaussians_with_kl_divergence_annealing:
+                self.state_updates.append((self.variational_cost_weight, T.minimum(1, self.variational_cost_weight + self.kl_divergence_annealing_rate)))
 
 
         # Beam-search variables

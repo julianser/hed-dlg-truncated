@@ -126,7 +126,8 @@ def prototype_state():
     # Dimensionality of Gaussian latent variable (under the assumption that covariance matrix is diagonal)
     state['latent_gaussian_per_utterance_dim'] = 10
     # If on, batch normalization will be applied to the MLP computing the prior and posterior of the latent variable.
-    # The normalization is done both w.r.t. to the batch and temporal dimension.
+    # The normalization is done both w.r.t. to the batch and temporal dimension. 
+    # THIS SEEMS TO WORK TERRIBLE. I RECOMMEND TO DISABLE THIS AND NOT TRAIN WITH BATCH NORMALIZATION.
     state['train_latent_gaussians_with_batch_normalization'] = False
     # The (diagonal) covariance matrix is scaled by this value.
     # Initial diagonal covariance matrix will be a softplus function times this value.
@@ -135,6 +136,13 @@ def prototype_state():
     state['scale_latent_variable_variances'] = 10
     # If on, the utterance decoder will ONLY be conditioned on the Gaussian latent variable.
     state['condition_decoder_only_on_latent_variable'] = False
+    # If on, the KL-divergence term weight for the Gaussian latent variable will be annealed from zero to one.
+    state['train_latent_gaussians_with_kl_divergence_annealing'] = False
+    # The KL-divergence term weight is increased by this amount for every training batch.
+    # It is truncated to one. For example, 1.0/60000.0 means that at iteration 60000 the model
+    # will assign weight one to the KL-divergence term (and thus be maximizing the true variational bound).
+    state['kl_divergence_annealing_rate'] = 1.0/60000.0
+
 
     # Initialization configuration
     state['initialize_from_pretrained_word_embeddings'] = False
@@ -305,7 +313,8 @@ def prototype_test_variational():
     state['latent_gaussian_per_utterance_dim'] = 5
     state['condition_latent_variable_on_dialogue_encoder'] = True
     state['condition_latent_variable_on_dcgm_encoder'] = True
-    state['train_latent_gaussians_with_batch_normalization'] = True
+    state['train_latent_gaussians_with_batch_normalization'] = False
+    state['train_latent_gaussians_with_kl_divergence_annealing'] = True
 
     # If out of memory, modify this!
     state['bs'] = 5
