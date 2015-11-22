@@ -26,14 +26,14 @@ class Model(object):
         Load the model.
 
         Any parameter which has one of the strings inside parameter_strings_to_ignore as a substring,
-        will not be loaded from the file (but instead initialized randomly).
+        will not be loaded from the file (but instead initialized as a new model, which usually means random).
         """
         vals = numpy.load(filename)
         for p in self.params:
             load_parameter = True
             for string_to_ignore in parameter_strings_to_ignore:
                 if string_to_ignore in p.name:
-                     logger.debug('Initializing parameter {} randomly'.format(p.name))
+                     logger.debug('Initializing parameter {} as in new model'.format(p.name))
                      load_parameter = False
 
             if load_parameter:

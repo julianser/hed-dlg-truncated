@@ -127,6 +127,8 @@ def main(args):
             if args.reinitialize_variational_parameters:
                 parameter_strings_to_ignore += ['Wd_']
                 parameter_strings_to_ignore += ['bd_']
+                parameter_strings_to_ignore += ['variational_cost_weight']
+
 
             load(model, filename, parameter_strings_to_ignore)
         else:

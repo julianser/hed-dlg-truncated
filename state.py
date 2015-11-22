@@ -320,6 +320,7 @@ def prototype_test_variational():
     state['condition_latent_variable_on_dcgm_encoder'] = True
     state['train_latent_gaussians_with_batch_normalization'] = False
     state['train_latent_gaussians_with_kl_divergence_annealing'] = True
+    state['kl_divergence_annealing_rate'] = 1.0/60000.0
 
     state['decoder_drop_previous_input_tokens'] = True
     state['decoder_drop_previous_input_tokens_rate'] = 0.75
