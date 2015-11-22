@@ -20,14 +20,18 @@ import copy
 logger = logging.getLogger(__name__)
 
 
-def add_random_variables_to_batch(state, rng, batch, prev_batch = None):
+def add_random_variables_to_batch(state, rng, batch, prev_batch, evaluate_mode):
     """
-    This is a helper function, which adds the Normal random variables in a batch.
+    This is a helper function, which adds the random variables in a batch.
     We do it this way, because we want to avoid Theano's random sampling both to speed up and to avoid
     known Theano issues with sampling inside scan loops.
 
-    Currently only the random variable 'ran_var_constutterance. is sampled from a standard Normal distribution, 
+    The random variable 'ran_var_constutterance' is sampled from a standard Normal distribution, 
     which remains constant during each utterance (i.e. between end-of-utterance tokens).
+    
+    When not in evaluate mode, the random variable 'ran_decoder_drop_mask' is sampled. 
+    This variable represents the input tokens which are replaced by unk when given to 
+    the decoder RNN.
     """
 
     # If none return none...
@@ -71,9 +75,15 @@ def add_random_variables_to_batch(state, rng, batch, prev_batch = None):
                     for j in range(0, batch['x'].shape[0]):
                         Ran_Var_ConstUtterance[j, idx, :] = prev_ran_vector
 
-
-    # Add new random variables to batch and return the new batch
+    # Add new random Gaussian variable to batch
     batch['ran_var_constutterance'] = Ran_Var_ConstUtterance
+
+    # Create word drop mask based on 'decoder_drop_previous_input_tokens_rate' option:
+    if evaluate_mode:
+        batch['ran_decoder_drop_mask'] = numpy.ones((batch['x'].shape[0], batch['x'].shape[1]), dtype='float32')
+    else:
+        ran_drop = rng.uniform(size=(batch['x'].shape[0], batch['x'].shape[1]))
+        batch['ran_decoder_drop_mask'] = (ran_drop <= state['decoder_drop_previous_input_tokens_rate']).astype('float32')
 
     return batch
 
@@ -166,10 +176,11 @@ def create_padded_batch(state, rng, x, force_end_of_utterance_token = False):
 
 class Iterator(SSIterator):
     def __init__(self, dialogue_file, batch_size, **kwargs):
-        SSIterator.__init__(self, dialogue_file, batch_size,                   \
-                            semantic_file=kwargs.pop('semantic_file', None), \
-                            max_len=kwargs.pop('max_len', -1),               \
+        SSIterator.__init__(self, dialogue_file, batch_size,                          \
+                            semantic_file=kwargs.pop('semantic_file', None),          \
+                            max_len=kwargs.pop('max_len', -1),                        \
                             use_infinite_loop=kwargs.pop('use_infinite_loop', False))
+
         # TODO: max_len should be handled here and SSIterator should zip semantic_data and 
         # data. 
         self.k_batches = kwargs.pop('sort_k_batches', 20)
@@ -182,6 +193,10 @@ class Iterator(SSIterator):
 
         # Keep track of previous batch, because this is needed to specify random variables
         self.prev_batch = None
+
+        # Store whether the iterator operates in evaluate mode or not
+        self.evaluate_mode = kwargs.pop('evaluate_mode', False)
+        print 'evaluate_mode', self.evaluate_mode
 
     def get_homogenous_batch_iter(self, batch_size = -1):
         while True:
@@ -281,7 +296,7 @@ class Iterator(SSIterator):
             # We add them separetly for each batch to save memory.
             # If we instead had added them to the full batch before splitting into mini-batches,
             # the random variables would take up several GBs for big batches and long documents.
-            batch = add_random_variables_to_batch(self.state, self.rng, batch, self.prev_batch)
+            batch = add_random_variables_to_batch(self.state, self.rng, batch, self.prev_batch, self.evaluate_mode)
             # Keep track of last batch
             self.prev_batch = batch
         except StopIteration:
@@ -304,7 +319,8 @@ def get_train_iterator(state):
         seed=state['seed'],
         semantic_file=semantic_train_path,
         use_infinite_loop=True,
-        max_len=-1) 
+        max_len=-1,
+        evaluate_mode=False)
      
     valid_data = Iterator(
         state['valid_dialogues'],
@@ -313,7 +329,8 @@ def get_train_iterator(state):
         seed=state['seed'],
         semantic_file=semantic_valid_path,
         use_infinite_loop=False,
-        max_len=-1)
+        max_len=-1,
+        evaluate_mode=True)
     return train_data, valid_data 
 
 def get_secondary_train_iterator(state):
@@ -340,5 +357,6 @@ def get_test_iterator(state):
         seed=state['seed'],
         semantic_file=semantic_test_path,
         use_infinite_loop=False,
-        max_len=-1)
+        max_len=-1,
+        evaluate_mode=True)
     return test_data

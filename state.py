@@ -143,6 +143,11 @@ def prototype_state():
     # will assign weight one to the KL-divergence term (and thus be maximizing the true variational bound).
     state['kl_divergence_annealing_rate'] = 1.0/60000.0
 
+    # If enabled, the previous token input to the decoder RNN is replaced with the 'unk' token at random.
+    state['decoder_drop_previous_input_tokens'] = False
+    # The rate at which the previous token input to the decoder is kept (i.e. not set to 'unk').
+    # Setting this to zero effectively disables teacher-forcing in the model.
+    state['decoder_drop_previous_input_tokens_rate'] = 0.75
 
     # Initialization configuration
     state['initialize_from_pretrained_word_embeddings'] = False
@@ -315,6 +320,10 @@ def prototype_test_variational():
     state['condition_latent_variable_on_dcgm_encoder'] = True
     state['train_latent_gaussians_with_batch_normalization'] = False
     state['train_latent_gaussians_with_kl_divergence_annealing'] = True
+
+    state['decoder_drop_previous_input_tokens'] = True
+    state['decoder_drop_previous_input_tokens_rate'] = 0.75
+
 
     # If out of memory, modify this!
     state['bs'] = 5

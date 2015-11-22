@@ -261,6 +261,7 @@ def main(args):
         x_semantic = batch['x_semantic']
         x_reset = batch['x_reset']
         ran_cost_utterance = batch['ran_var_constutterance']
+        ran_decoder_drop_mask = batch['ran_decoder_drop_mask']
 
         is_end_of_batch = False
         if numpy.sum(numpy.abs(x_reset)) < 1:
@@ -269,9 +270,9 @@ def main(args):
 
         if state['use_nce']:
             y_neg = rng.choice(size=(10, max_length, x_data.shape[1]), a=model.idim, p=model.noise_probs).astype('int32')
-            c, variational_cost, posterior_mean_variance = train_batch(x_data, x_data_reversed, y_neg, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance)
+            c, variational_cost, posterior_mean_variance = train_batch(x_data, x_data_reversed, y_neg, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
         else:
-            c, variational_cost, posterior_mean_variance = train_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance)
+            c, variational_cost, posterior_mean_variance = train_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
 
         print 'cost_sum', c
         print 'cost_mean', c / float(numpy.sum(x_cost_mask))
@@ -344,9 +345,10 @@ def main(args):
             var_costs = numpy.zeros((k_eval), dtype='float32')
             gradients_wrt_softmax = numpy.zeros((k_eval, model.qdim_decoder, model.qdim_decoder), dtype='float32')
             for k in range(0, k_eval):
-                batch = add_random_variables_to_batch(model.state, model.rng, batch)
+                batch = add_random_variables_to_batch(model.state, model.rng, batch, None, False)
                 ran_cost_utterance = batch['ran_var_constutterance']
-                softmax_cost, var_cost, grads_wrt_softmax, grads_wrt_variational_cost = eval_grads(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance)
+                ran_decoder_drop_mask = batch['ran_decoder_drop_mask']
+                softmax_cost, var_cost, grads_wrt_softmax, grads_wrt_variational_cost = eval_grads(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
                 softmax_costs[k] = softmax_cost
                 var_costs[k] = var_cost
                 gradients_wrt_softmax[k, :, :] = grads_wrt_softmax
@@ -428,8 +430,9 @@ def main(args):
 
                     x_reset = batch['x_reset']
                     ran_cost_utterance = batch['ran_var_constutterance']
+                    ran_decoder_drop_mask = batch['ran_decoder_drop_mask']
 
-                    c, c_list, variational_cost, posterior_mean_variance = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance)
+                    c, c_list, variational_cost, posterior_mean_variance = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
 
                     # Rehape into matrix, where rows are validation samples and columns are tokens
                     # Note that we use max_length-1 because we don't get a cost for the first token
