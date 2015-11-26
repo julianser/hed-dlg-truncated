@@ -321,46 +321,7 @@ def parse_args():
 
 if __name__ == "__main__":
     
-    prefix  = { 
-               "LSMDC"   : "1446079704.31_LSMDC15",
-               "FineTune": "1439434093.73_BookModel__5148",
-               "DVS"     : "1440793290.55_DVS2Model",
-               "Book"    : "1439434093.73_BookModel"
-              }
-
-    context = {
-               "Train"   : "LSMDC15_annos_training.contextDict.pkl",
-               "Val"     : "LSMDC15_annos_val.contextDict.pkl",
-               "Test"    : "LSMDC15_annos_test.contextDict.pkl"
-              }
-    
-    paths   = {
-               "LSMDC"   : "/Tmp/colonnap/bestDVS.v2/",
-               "DVS"     : "/Tmp/colonnap/bestDVS/",
-               "Book"    : "/Tmp/colonnap/bestBook/",
-               "FineTune": "/Tmp/colonnap/fineTune.v4/"
-              }
-    
     main()
-    
-    # Old version. With kwargs. Maybe usefull later if we use this script to 
-    # generate context live. Or from predictions. Or a batch of batch. 
     
     # Example of sentence ID.
     # ID = "3010_BIG_MOMMAS_LIKE_FATHER_LIKE_SON_00.03.27.568-00.03.35.097"
-    
-    # Exampled of single sentence
-    # main(model_prefix = prefix, sentenceID = ID, sentenceDict = testDict, path = modelPath, nb_sent_back = 3 , process_batch = False)
-    
-    # Example of batch
-    # main(model_prefix = prefix, sentenceDict = testDict,  path = modelPath, nb_sent_back = 3, outputName = "TestSet_DVS.v2_3back")
-    
-    # Old arguments.
-    #path         = kwargs.get("path")
-    #model_prefix = kwargs.get("model_prefix")
-    #sentenceDict = kwargs.get('sentenceDict') 
-    #sentenceID   = kwargs.get('sentenceID') 
-    #outputName   = kwargs.get('outputName') 
-    #max_length   = kwargs.get('max_length', 300) 
-    #nb_sent_back = kwargs.get('nb_sent_back', 3) 
-    #batch        = kwargs.get('process_batch', True)
