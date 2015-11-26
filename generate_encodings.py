@@ -1,5 +1,27 @@
 #!/usr/bin/env python
 
+    ##------------------------------------------------------------------------------##
+    #                                                                                #
+    #   Our end goal is to use those encodings to improve, among other things,       #
+    #   caption generation.                                                          #
+    #                                                                                #
+    #   So, let's say we want to predict what's happening in video DVS_n, n being    # 
+    #   the n-ieme segment in our movie. We assume we know what happened before,     #
+    #   from DVS_0 to DVS_n-1.                                                       #
+    #   What we want to do is use the context given by m previous sentences,         #
+    #   either ground truth or predicted, to make a prediction for the current       #
+    #   sentence. Then we use this prediction as another set of features in our      # 
+    #   video model.                                                                 #
+    #                                                                                #   
+    #   Therefore, for each sentence, the context is built only with the previous    #
+    #   sentences. And then we compute the predicted encoding.                       #
+    #                                                                                #
+    #   Each entry in the dictionary V_n is the predicted value for the video n      #
+    #   considering the n-m previous one. No overlap, no seeing into the future      #
+    #   (or even see the present). Can be used directly.                             #
+    #                                                                                #
+    ##------------------------------------------------------------------------------##
+    
 import argparse
 import cPickle
 import traceback
@@ -30,8 +52,7 @@ def build_text_context(sentenceID, dictionary, nb_sentences_back):
     ##------------------------------------------------------------------------------##
 
     context  = []
-    sentence = dictionary[sentenceID][0]
-    print sentence
+    
     childID     = dictionary[sentenceID][1]
     
     if childID == "None":
@@ -39,7 +60,6 @@ def build_text_context(sentenceID, dictionary, nb_sentences_back):
         return "no_context"
     
     else:
-        #context.append(sentence)
         parentID    = sentenceID
         newSentence = ""
 
@@ -73,8 +93,8 @@ def build_context(model, sentenceID, dictionary, nb_sentences_back):
     reversed_context = []
 
     if context_text == "no_context":
-            joined_context   = [model.eos_sym]
-            reversed_context = [model.eos_sym]
+            joined_context   = [0]
+            reversed_context = [0]  #[model.eos_sym]
     
     else:
         for context_id, context_sentences in enumerate(context_text):
@@ -131,7 +151,7 @@ def compute_encoding_trunc(model, encodingFunc, context, reversed_context, max_l
     ##------------------------------------------------------------------------------##
     #                  Alternative way to compute the encodings.                     #
     #           Truncate the context if it's longer than some set value.             #
-    #                  May disappear or be merged in teh future.                     #
+    #                  May disappear or be merged in the future.                     #
     ##------------------------------------------------------------------------------##
     
     context_length           = len(context)      
@@ -189,28 +209,6 @@ def get_all_encodings(model, encoding_func, sentenceDict, max_length, nb_sent_ba
     #   Compute the encodings for the whole set contained in sentenceDict.           #                                           
     ##------------------------------------------------------------------------------##
     
-    ##------------------------------------------------------------------------------##
-    #                                                                                #
-    #   Our end goal is to use those encodings to improve, among other things,       #
-    #   caption generation.                                                          #
-    #                                                                                #
-    #   So, let's say we want to predict what's happening in video DVS_n, n being    # 
-    #   the n-ieme segment in our movie. We assume we know what happened before,     #
-    #   from DVS_0 to DVS_n-1.                                                       #
-    #   What we want to do is use the context given by m previous sentences,         #
-    #   either ground truth or predicted, to make a prediction for the current       #
-    #   sentence. Then we use this prediction as another set of features in our      # 
-    #   video model.                                                                 #
-    #                                                                                #   
-    #   Therefore, for each sentence, the context is built only with the previous    #
-    #   sentences. And then we compute the predicted encoding.                       #
-    #                                                                                #
-    #   Each entry in the dictionary V_n is the predicted value for the video n      #
-    #   considering the n-m previous one. No overlap, no seeing into the future      #
-    #   (or even see the present). Can be used directly.                             #
-    #                                                                                #
-    ##------------------------------------------------------------------------------##
-    
     
     encodingDict = {}
     joined_context = []
@@ -219,12 +217,12 @@ def get_all_encodings(model, encoding_func, sentenceDict, max_length, nb_sent_ba
     
     for keys in sentenceDict:
         
-        print "\n Sentence Number ", sentenceNb
-        print keys
-        sentenceNb += 1
+        print "\n----> Sentence Number ", sentenceNb
+        print "----> Sentence Name ", keys
 
         encodingDict[keys] =  get_encoding(model, encoding_func, keys, sentenceDict, max_length, nb_sent_back)
     
+        sentenceNb += 1
         #print "begin",  encodingDict[keys][0,:50]
         #print "middle", encodingDict[keys][0,1000:1050]
         #print "end", encodingDict[keys][0,1950:]
@@ -273,13 +271,14 @@ def main(**kwargs):
     
     if args.batch:
         print "---> Computing encoding in batch..."
-        get_all_encodings(model, encoding_function, args.sentenceDict, args.max_length, args.nback, args.output_name)
+        print args.sentenceDict
+        get_all_encodings(model, encoding_function, sentenceDict, args.max_length, args.nback, args.output_name)
         print "\tL----> All done."
 
     if args.one_sentence:
         
         print "---> Computing encoding for " , args.sentenceID
-        encoding = get_hidden_state(model, encoding_function, args.sentence_ID, args.sentenceDict, args.max_length, args.nback)
+        encoding = get_hidden_state(model, encoding_function, args.sentence_ID, sentenceDict, args.max_length, args.nback)
         print "\tL----> Done."
         
         if args.output_name is None:
@@ -297,7 +296,7 @@ def parse_args():
     parser = argparse.ArgumentParser("Compute encodings from model, for different context lenghts.")
     
     parser.add_argument("--model_path",   type = str, help="Path to the model prefix (without _model.npz or _state.pkl).")
-    parser.add_argument("--sentenceDict", type = str, help="Path to the dictionnary. Contain each sentence ID as keys and the sentence and previous ID as values.")
+    parser.add_argument("--sentenceDict", help="Path to the dictionnary. Contain each sentence ID as keys and the sentence and previous ID as values.")
     parser.add_argument("--output_name",  type = str, help="Name of the output file.")
     
     parser.add_argument("--one_sentence", action = "store_true", help="Compute encodings for one sentence only.")
@@ -310,7 +309,7 @@ def parse_args():
     parser.add_argument("--all_sets",     action = "store_true", help="Compute encodings in batch, for training, validation and test sets.")
     parser.add_argument("--all_models",   action = "store_true", help="Compute encodings in batch, for different model.")
     
-    parser.add_argument("--nback",        type = int,            help="Number of sentences back to use to build context. The current sentence doesn't count in nback and is not included in your context.")
+    parser.add_argument("--nback",        type = int,            default = 4,   help="Number of sentences back to use to build context. The current sentence doesn't count in nback and is not included in your context.")
     parser.add_argument("--full_context", action = "store_true", help="Get the full lenght of the context. For each sentence, the context go back until reaching the begining of the movie.")
     parser.add_argument("--max_length",   type = int,            default = 200, help="Max number of words in the context.")
     
