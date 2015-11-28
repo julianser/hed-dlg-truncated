@@ -428,7 +428,6 @@ def main(args):
                     max_length = batch['max_length']
                     x_cost_mask = batch['x_mask']
                     x_semantic = batch['x_semantic']
-                    x_semantic_nonempty_indices = numpy.where(x_semantic >= 0)
 
                     x_reset = batch['x_reset']
                     ran_cost_utterance = batch['ran_var_constutterance']
