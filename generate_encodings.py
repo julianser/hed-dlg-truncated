@@ -145,6 +145,8 @@ def compute_encoding(model, encodingFunc, context, reversed_context, max_length)
     print "----> hs[:, :, -1] shape ", numpy.shape(hs[:,:,-1])
     
     # Get embedding at the last end-of-sentence / end-of-utterance token
+    # This is necessary if we padd context with zeros at the end.
+    # Otherwise, it won't do anything :)
     last_eos_index = -1
     for i in range(len(context)):
         if context[i] == model.eos_sym:
