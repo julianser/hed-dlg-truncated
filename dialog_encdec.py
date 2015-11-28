@@ -1353,6 +1353,9 @@ class DialogEncoderDecoder(Model):
         return self.next_probs_fn
 
     # Currently does not supported truncated computations...
+    # NOTE: If batch is given as input with padded endings 
+    # (e.g. last 'n' tokens are all zero and not part of the real sequence), 
+    # then the encoding must be extracted at index of the last non-padded (non-zero) token.
     def build_encoder_function(self):
         if not hasattr(self, 'encoder_fn'):
 
@@ -1396,6 +1399,8 @@ class DialogEncoderDecoder(Model):
         if 'bootstrap_from_semantic_information' in state:
             assert state['bootstrap_from_semantic_information'] == False # We don't support semantic info right now...
 
+        # Make sure eos_sym is never zero, otherwise generate_encodings script would fail
+        assert state['eos_sym'] > 0
 
         if not 'bidirectional_utterance_encoder' in state:
             state['bidirectional_utterance_encoder'] = False

@@ -144,7 +144,15 @@ def compute_encoding(model, encodingFunc, context, reversed_context, max_length)
     print "----> hs[-1, :, :] shape ", numpy.shape(hs[-1,:,:])
     print "----> hs[:, :, -1] shape ", numpy.shape(hs[:,:,-1])
     
-    return hs[-1, :,:]
+    # Get embedding at the last end-of-sentence / end-of-utterance token
+    last_eos_index = -1
+    for i in range(len(context)):
+        if context[i] == model.eos_sym:
+             last_eos_index = i
+
+    return hs[last_eos_index, :, :]
+    #return hs[-1, :,:]
+
 
 def compute_encoding_trunc(model, encodingFunc, context, reversed_context, max_length):
     
