@@ -154,7 +154,7 @@ def OrthogonalInit(rng, sizeX, sizeY, sparsity=-1, scale=1):
         values[dx, perm[:sparsity]] = new_vals
 
     # Use SciPy:
-    if sizeX*sizeY > 20000000:
+    if sizeX*sizeY > 5000000:
         import scipy
         u,s,v = scipy.linalg.svd(values)
     else:

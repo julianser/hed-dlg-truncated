@@ -1039,7 +1039,7 @@ class DialogLevelLatentEncoder(EncoderDecoderBase):
 
         # If linear dynamics is enabled, then we initialize matrix for these.
         if self.latent_gaussian_linear_dynamics:
-            self.Wl_linear_dynamics = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.latent_dim, self.latent_dim), name='Wl_linear_dynamics'+self.name))
+            self.Wl_linear_dynamics = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.latent_dim, self.latent_dim), name='Wl_linear_dynamics'+self.name))
          
     def plain_dialogue_step(self, h_t, m_t, hs_tm1):
         if m_t.ndim >= 1:
