@@ -82,8 +82,12 @@ def add_random_variables_to_batch(state, rng, batch, prev_batch, evaluate_mode):
     if evaluate_mode:
         batch['ran_decoder_drop_mask'] = numpy.ones((batch['x'].shape[0], batch['x'].shape[1]), dtype='float32')
     else:
-        ran_drop = rng.uniform(size=(batch['x'].shape[0], batch['x'].shape[1]))
-        batch['ran_decoder_drop_mask'] = (ran_drop <= state['decoder_drop_previous_input_tokens_rate']).astype('float32')
+        if state.get('decoder_drop_previous_input_tokens', False):
+            ran_drop = rng.uniform(size=(batch['x'].shape[0], batch['x'].shape[1]))
+            batch['ran_decoder_drop_mask'] = (ran_drop <= state['decoder_drop_previous_input_tokens_rate']).astype('float32')
+        else:
+            batch['ran_decoder_drop_mask'] = numpy.ones((batch['x'].shape[0], batch['x'].shape[1]), dtype='float32')
+
 
     return batch
 
