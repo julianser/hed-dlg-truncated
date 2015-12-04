@@ -1036,6 +1036,10 @@ class DialogLevelLatentEncoder(EncoderDecoderBase):
 
         self.Wl_std_out = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.latent_dim, self.latent_dim), name='Wl_std_out'+self.name))
         self.bl_std_out = add_to_params(self.params, theano.shared(value=np.zeros((self.latent_dim,), dtype='float32'), name='bl_std_out'+self.name))
+
+        # If linear dynamics is enabled, then we initialize matrix for these.
+        if self.latent_gaussian_linear_dynamics:
+            self.Wl_linear_dynamics = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.latent_dim, self.latent_dim), name='Wl_linear_dynamics'+self.name))
          
     def plain_dialogue_step(self, h_t, m_t, hs_tm1):
         if m_t.ndim >= 1:
@@ -1088,7 +1092,7 @@ class DialogLevelLatentEncoder(EncoderDecoderBase):
             transformed_h = self.dialogue_rec_activation(T.dot(h, self.Wl_deep_input) + self.bl_deep_input)
             h_out = self.dialogue_rec_activation(T.dot(transformed_h, self.Wl_in) + self.bl_in)
 
-        
+
         if not one_step:
             _res,  _ = theano.scan(f_hier,\
                                sequences=[h_out, xmask],\
@@ -1105,8 +1109,22 @@ class DialogLevelLatentEncoder(EncoderDecoderBase):
 
         # Finally project last hidden state to mean and variance of Gaussian variable and sample it.
         # We use the softplus function to stabilize the operation.
-        hs_mean = T.dot(hs, self.Wl_mean_out) + self.bl_mean_out
-        hs_var = T.nnet.softplus((T.dot(hs, self.Wl_std_out) + self.bl_std_out)) * self.scale_latent_variable_variances
+        if self.latent_gaussian_linear_dynamics:
+            if not one_step:
+                hs_rolled_left = T.concatenate([hs_0.dimshuffle('x', 0, 1), hs], axis=0)
+                hs_rolled_left = hs_rolled_left[:-1, :, :]
+                hs = hs + T.dot(hs_rolled_left, self.Wl_linear_dynamics)
+
+                hs_mean = T.dot(hs, self.Wl_mean_out) + self.bl_mean_out
+                hs_var = T.nnet.softplus((T.dot(hs, self.Wl_std_out) + self.bl_std_out)) * self.scale_latent_variable_variances
+            else:
+                hs = hs + T.dot(hs_0, self.Wl_linear_dynamics)
+                hs_mean = T.dot(hs, self.Wl_mean_out) + self.bl_mean_out
+                hs_var = T.nnet.softplus((T.dot(hs, self.Wl_std_out) + self.bl_std_out)) * self.scale_latent_variable_variances
+
+        else:
+            hs_mean = T.dot(hs, self.Wl_mean_out) + self.bl_mean_out
+            hs_var = T.nnet.softplus((T.dot(hs, self.Wl_std_out) + self.bl_std_out)) * self.scale_latent_variable_variances
 
         return [hs, hs_mean, hs_var] 
 
@@ -1459,6 +1477,8 @@ class DialogEncoderDecoder(Model):
            state['scale_latent_variable_variances'] = 0.01
         if not 'condition_decoder_only_on_latent_variable' in state:
            state['condition_decoder_only_on_latent_variable'] = False
+        if not 'latent_gaussian_linear_dynamics' in state:
+           state['latent_gaussian_linear_dynamics'] = False
         if not 'train_latent_gaussians_with_batch_normalization' in state:
            state['train_latent_gaussians_with_batch_normalization'] = False
         if not 'train_latent_gaussians_with_kl_divergence_annealing' in state:

@@ -125,6 +125,10 @@ def prototype_state():
     state['condition_latent_variable_on_dcgm_encoder'] = False
     # Dimensionality of Gaussian latent variable (under the assumption that covariance matrix is diagonal)
     state['latent_gaussian_per_utterance_dim'] = 10
+    # If on, the latent Gaussian variable at time t will be affected linearly by the latent variable at time t-1.
+    state['latent_gaussian_linear_dynamics'] = False
+
+
     # If on, batch normalization will be applied to the MLP computing the prior and posterior of the latent variable.
     # The normalization is done both w.r.t. to the batch and temporal dimension. 
     # THIS SEEMS TO WORK TERRIBLE. I RECOMMEND TO DISABLE THIS AND NOT TRAIN WITH BATCH NORMALIZATION.
@@ -136,6 +140,7 @@ def prototype_state():
     state['scale_latent_variable_variances'] = 10
     # If on, the utterance decoder will ONLY be conditioned on the Gaussian latent variable.
     state['condition_decoder_only_on_latent_variable'] = False
+
     # If on, the KL-divergence term weight for the Gaussian latent variable will be annealed from zero to one.
     state['train_latent_gaussians_with_kl_divergence_annealing'] = False
     # The KL-divergence term weight is increased by this amount for every training batch.
@@ -321,6 +326,7 @@ def prototype_test_variational():
     state['train_latent_gaussians_with_batch_normalization'] = False
     state['train_latent_gaussians_with_kl_divergence_annealing'] = True
     state['kl_divergence_annealing_rate'] = 1.0/60000.0
+    state['latent_gaussian_linear_dynamics'] = True
 
     state['decoder_drop_previous_input_tokens'] = True
     state['decoder_drop_previous_input_tokens_rate'] = 0.75
