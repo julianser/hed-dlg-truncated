@@ -122,13 +122,13 @@ def main(args):
 
             parameter_strings_to_ignore = []
             if args.reinitialize_decoder_parameters:
-                parameter_strings_to_ignore += ['latent_utterance_prior']
-                parameter_strings_to_ignore += ['latent_utterance_approx_posterior']
-            if args.reinitialize_variational_parameters:
                 parameter_strings_to_ignore += ['Wd_']
                 parameter_strings_to_ignore += ['bd_']
+            if args.reinitialize_variational_parameters:
+                parameter_strings_to_ignore += ['latent_utterance_prior']
+                parameter_strings_to_ignore += ['latent_utterance_approx_posterior']
                 parameter_strings_to_ignore += ['variational_cost_weight']
-
+                parameter_strings_to_ignore += ['inlatent_dcgm_encoder']
 
             load(model, filename, parameter_strings_to_ignore)
         else:
