@@ -313,8 +313,11 @@ def main(args):
 
             # Keep track of training cost for the last 'train_freq' batches.
             current_train_cost = train_cost/train_done
-            if prev_train_done >= 1:
+            if prev_train_done >= 1 and abs(train_done - prev_train_done) > 0:
                 current_train_cost = float(train_cost - prev_train_cost)/float(train_done - prev_train_done)
+
+            if numpy.isinf(c) or numpy.isnan(c):
+                current_train_cost = 0
 
             prev_train_cost = train_cost
             prev_train_done = train_done
@@ -373,6 +376,14 @@ def main(args):
             print 'Wd_s_q latent', numpy.sum(numpy.abs(Wd_s_q[(Wd_s_q.shape[0]-state['latent_gaussian_per_utterance_dim']):Wd_s_q.shape[0], :])), numpy.mean(numpy.abs(Wd_s_q[(Wd_s_q.shape[0]-state['latent_gaussian_per_utterance_dim']):Wd_s_q.shape[0], :]))
 
             print 'Wd_s_q ratio', (numpy.sum(numpy.abs(Wd_s_q[(Wd_s_q.shape[0]-state['latent_gaussian_per_utterance_dim']):Wd_s_q.shape[0], :])) / numpy.sum(numpy.abs(Wd_s_q)))
+
+            if 'latent_gaussian_linear_dynamics' in state:
+                if state['latent_gaussian_linear_dynamics']:
+                   prior_Wl_linear_dynamics = model.latent_utterance_variable_prior_encoder.Wl_linear_dynamics.get_value()
+                   print 'prior_Wl_linear_dynamics', numpy.sum(numpy.abs(prior_Wl_linear_dynamics)), numpy.mean(numpy.abs(prior_Wl_linear_dynamics)), numpy.std(numpy.abs(prior_Wl_linear_dynamics))
+
+                   approx_posterior_Wl_linear_dynamics = model.latent_utterance_variable_approx_posterior_encoder.Wl_linear_dynamics.get_value()
+                   print 'approx_posterior_Wl_linear_dynamics', numpy.sum(numpy.abs(approx_posterior_Wl_linear_dynamics)), numpy.mean(numpy.abs(approx_posterior_Wl_linear_dynamics)), numpy.std(numpy.abs(approx_posterior_Wl_linear_dynamics))
 
 
         #print 'tmp_normalizing_constant_a', tmp_normalizing_constant_a
@@ -433,7 +444,9 @@ def main(args):
                     ran_cost_utterance = batch['ran_var_constutterance']
                     ran_decoder_drop_mask = batch['ran_decoder_drop_mask']
 
-                    c, c_list, variational_cost, posterior_mean_variance = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
+                    c, kl_term, c_list, kl_term_list, posterior_mean_variance = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
+                    print 'c_list', c_list
+                    print 'kl_term_list', kl_term_list
 
                     # Rehape into matrix, where rows are validation samples and columns are tokens
                     # Note that we use max_length-1 because we don't get a cost for the first token

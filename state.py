@@ -125,7 +125,7 @@ def prototype_state():
     state['condition_latent_variable_on_dcgm_encoder'] = False
     # Dimensionality of Gaussian latent variable (under the assumption that covariance matrix is diagonal)
     state['latent_gaussian_per_utterance_dim'] = 10
-    # If on, the latent Gaussian variable at time t will be affected linearly by the latent variable at time t-1.
+    # If on, the latent Gaussian variable at time t will be affected linearly by the distribution (sufficient statistics) of the latent variable at time t-1. This is different from an actual linear state space model (Kalman filter), since effective latent variables at time t are independent of all other latent variables, given the observed utterances. However, it's useful, because it avoids forward propagating noise (which would make the training procedure more difficult than it already is!).
     state['latent_gaussian_linear_dynamics'] = False
 
 
@@ -406,3 +406,107 @@ def prototype_movies():
     state['rankdim'] = 300
 
     return state
+
+
+
+def prototype_twitter():
+    state = prototype_state()
+    
+    # Fill your paths here! 
+    state['train_dialogues'] = "../TwitterData/Training.dialogues.pkl"
+    state['test_dialogues'] = "../TwitterData/Test.dialogues.pkl"
+    state['valid_dialogues'] = "../TwitterData/Validation.dialogues.pkl"
+    state['dictionary'] = "../TwitterData/Dataset.dict.pkl" 
+    state['save_dir'] = "Output" 
+
+    # Gradients will be truncated after 80 steps. This seems like a fair start.
+    state['max_grad_steps'] = 80
+    
+    # Validation frequency
+    state['valid_freq'] = 5000
+    
+    state['prefix'] = "TwitterModel_" 
+    state['updater'] = 'adam'
+    
+    # Model architecture
+    state['bidirectional_utterance_encoder'] = True
+    state['add_latent_gaussian_per_utterance'] = False
+    state['latent_gaussian_per_utterance_dim'] = 20
+    state['deep_dialogue_input'] = True
+    state['deep_out'] = True
+ 
+    state['bs'] = 80 # If out of memory, modify this!
+    state['decoder_bias_type'] = 'selective' # Choose between 'first', 'all' and 'selective' 
+    state['direct_connection_between_encoders_and_decoder'] = False
+
+    state['reset_utterance_decoder_at_end_of_utterance'] = True
+    state['reset_utterance_encoder_at_end_of_utterance'] = False
+    state['lr'] = 0.0001
+
+
+    state['qdim_encoder'] = 1000
+    state['qdim_decoder'] = 1000
+    # Dimensionality of dialogue hidden layer 
+    state['sdim'] = 1000
+    # Dimensionality of low-rank approximation
+    state['rankdim'] = 500
+
+    return state
+
+
+def prototype_twitter_variational():
+    state = prototype_state()
+    
+    # Fill your paths here! 
+    state['train_dialogues'] = "../TwitterData/Training.dialogues.pkl"
+    state['test_dialogues'] = "../TwitterData/Test.dialogues.pkl"
+    state['valid_dialogues'] = "../TwitterData/Validation.dialogues.pkl"
+    state['dictionary'] = "../TwitterData/Dataset.dict.pkl" 
+    state['save_dir'] = "Output" 
+
+    # Gradients will be truncated after 80 steps. This seems like a fair start.
+    state['max_grad_steps'] = 80
+    
+    # Validation frequency
+    state['valid_freq'] = 5000
+    
+    state['prefix'] = "TwitterModel_" 
+    state['updater'] = 'adam'
+    
+    # Model architecture
+    state['bidirectional_utterance_encoder'] = True
+    state['add_latent_gaussian_per_utterance'] = False
+    state['latent_gaussian_per_utterance_dim'] = 20
+    state['deep_dialogue_input'] = True
+    state['deep_out'] = True
+ 
+    state['bs'] = 80 # If out of memory, modify this!
+    state['decoder_bias_type'] = 'selective' # Choose between 'first', 'all' and 'selective' 
+    state['direct_connection_between_encoders_and_decoder'] = False
+
+    state['reset_utterance_decoder_at_end_of_utterance'] = True
+    state['reset_utterance_encoder_at_end_of_utterance'] = False
+
+    state['add_latent_gaussian_per_utterance'] = True
+    state['latent_gaussian_per_utterance_dim'] = 100
+    state['scale_latent_variable_variances'] = 0.1
+    state['lr'] = 0.0001
+    state['train_latent_gaussians_with_batch_normalization'] = False
+    state['condition_latent_variable_on_dialogue_encoder'] = True
+    state['condition_latent_variable_on_dcgm_encoder'] = True
+    state['condition_decoder_only_on_latent_variable'] = True
+    state['train_latent_gaussians_with_kl_divergence_annealing'] = True
+    state['kl_divergence_annealing_rate'] = 1.0/60000.0
+    state['decoder_drop_previous_input_tokens'] = True
+    state['decoder_drop_previous_input_tokens_rate'] = 0.75
+
+    state['qdim_encoder'] = 1000
+    state['qdim_decoder'] = 1000
+    # Dimensionality of dialogue hidden layer 
+    state['sdim'] = 1000
+    # Dimensionality of low-rank approximation
+    state['rankdim'] = 500
+
+    return state
+
+

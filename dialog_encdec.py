@@ -1039,13 +1039,22 @@ class DialogLevelLatentEncoder(EncoderDecoderBase):
 
         # If linear dynamics is enabled, then we initialize matrix for these.
         if self.latent_gaussian_linear_dynamics:
-            self.Wl_linear_dynamics = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.latent_dim, self.latent_dim), name='Wl_linear_dynamics'+self.name))
-         
+
+            self.Wl_linear_dynamics = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.latent_dim, self.latent_dim), name='Wl_linear_dynamics'+self.name))
+
+            # Julian: I have experimented with orthogonal matrix initialization for the linear dynamics.
+            # Although it has nice properties (matrix preserves more information since it is full rank, and if its eigenvalues are all positive the linear dynamics are just rotations in space), it makes training very unstable!
+            #self.Wl_linear_dynamics = add_to_params(self.params, theano.shared(value=OrthogonalInit(self.rng, self.latent_dim, self.latent_dim), name='Wl_linear_dynamics'+self.name))
+
     def plain_dialogue_step(self, h_t, m_t, hs_tm1):
         if m_t.ndim >= 1:
             m_t = m_t.dimshuffle(0, 'x')
 
-        hs_t = (m_t) * hs_tm1 + (1 - m_t) * h_t
+        if self.latent_gaussian_linear_dynamics:
+            hs_t = (m_t) * hs_tm1 + (1 - m_t) * h_t + (1 - m_t) * T.dot(hs_tm1, self.Wl_linear_dynamics)
+        else:
+            hs_t = (m_t) * hs_tm1 + (1 - m_t) * h_t
+
         return hs_t
 
     def build_encoder(self, h, x, xmask=None, latent_variable_mask=None, prev_state=None, **kwargs):
@@ -1078,7 +1087,7 @@ class DialogLevelLatentEncoder(EncoderDecoderBase):
             hs_0 = kwargs['prev_hs']
 
         if xmask == None:
-            xmask = T.neq(x, self.eos_sym)       
+            xmask = T.neq(x, self.eos_sym)
 
         f_hier = self.plain_dialogue_step
         o_hier_info = [hs_0]
@@ -1109,22 +1118,26 @@ class DialogLevelLatentEncoder(EncoderDecoderBase):
 
         # Finally project last hidden state to mean and variance of Gaussian variable and sample it.
         # We use the softplus function to stabilize the operation.
-        if self.latent_gaussian_linear_dynamics:
-            if not one_step:
-                hs_rolled_left = T.concatenate([hs_0.dimshuffle('x', 0, 1), hs], axis=0)
-                hs_rolled_left = hs_rolled_left[:-1, :, :]
-                hs = hs + T.dot(hs_rolled_left, self.Wl_linear_dynamics)
+        #if self.latent_gaussian_linear_dynamics:
+        #    if not one_step:
+        #        hs_rolled_left = T.concatenate([hs_0.dimshuffle('x', 0, 1), hs], axis=0)
+        #        hs_rolled_left = hs_rolled_left[:-1, :, :]
+        #        hs = hs + T.dot(hs_rolled_left, self.Wl_linear_dynamics)
 
-                hs_mean = T.dot(hs, self.Wl_mean_out) + self.bl_mean_out
-                hs_var = T.nnet.softplus((T.dot(hs, self.Wl_std_out) + self.bl_std_out)) * self.scale_latent_variable_variances
-            else:
-                hs = hs + T.dot(hs_0, self.Wl_linear_dynamics)
-                hs_mean = T.dot(hs, self.Wl_mean_out) + self.bl_mean_out
-                hs_var = T.nnet.softplus((T.dot(hs, self.Wl_std_out) + self.bl_std_out)) * self.scale_latent_variable_variances
+        #        hs_mean = T.dot(hs, self.Wl_mean_out) + self.bl_mean_out
+        #        hs_var = T.nnet.softplus((T.dot(hs, self.Wl_std_out) + self.bl_std_out)) * self.scale_latent_variable_variances
+        #    else:
+        #        hs = hs + T.dot(hs_0, self.Wl_linear_dynamics)
+        #        hs_mean = T.dot(hs, self.Wl_mean_out) + self.bl_mean_out
+        #        hs_var = T.nnet.softplus((T.dot(hs, self.Wl_std_out) + self.bl_std_out)) * self.scale_latent_variable_variances
 
-        else:
-            hs_mean = T.dot(hs, self.Wl_mean_out) + self.bl_mean_out
-            hs_var = T.nnet.softplus((T.dot(hs, self.Wl_std_out) + self.bl_std_out)) * self.scale_latent_variable_variances
+        #else:
+        #    hs_mean = T.dot(hs, self.Wl_mean_out) + self.bl_mean_out
+        #    hs_var = T.nnet.softplus((T.dot(hs, self.Wl_std_out) + self.bl_std_out)) * self.scale_latent_variable_variances
+
+        hs_mean = T.dot(hs, self.Wl_mean_out) + self.bl_mean_out
+        hs_var = T.nnet.softplus((T.dot(hs, self.Wl_std_out) + self.bl_std_out)) * self.scale_latent_variable_variances
+
 
         return [hs, hs_mean, hs_var] 
 
@@ -1281,7 +1294,7 @@ class DialogEncoderDecoder(Model):
                                                          self.x_max_length, self.x_cost_mask,
                                                          self.x_semantic_targets, self.x_reset_mask, 
                                                          self.ran_cost_utterance, self.x_dropmask],
-                                            outputs=[self.training_cost, self.variational_cost, self.latent_utterance_variable_approx_posterior_mean_var],
+                                            outputs=[self.training_cost, self.variational_cost_acc, self.latent_utterance_variable_approx_posterior_mean_var],
                                             updates=self.updates + self.state_updates, 
                                             on_unused_input='warn', 
                                             name="train_fn")
@@ -1298,7 +1311,7 @@ class DialogEncoderDecoder(Model):
                                                   self.x_cost_mask, self.x_semantic_targets, 
                                                   self.x_reset_mask, self.ran_cost_utterance, 
                                                   self.x_dropmask],
-                                            outputs=[self.training_cost, self.variational_cost, self.latent_utterance_variable_approx_posterior_mean_var],
+                                            outputs=[self.training_cost, self.variational_cost_acc, self.latent_utterance_variable_approx_posterior_mean_var],
                                             updates=self.updates + self.state_updates, 
                                             on_unused_input='warn', 
                                             name="train_fn")
@@ -1310,7 +1323,7 @@ class DialogEncoderDecoder(Model):
             # Compile functions
             logger.debug("Building evaluation function")
             self.eval_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_cost_mask, self.x_semantic_targets, self.x_reset_mask, self.ran_cost_utterance, self.x_dropmask], 
-                                            outputs=[self.evaluation_cost, self.softmax_cost, self.variational_cost, self.latent_utterance_variable_approx_posterior_mean_var], 
+                                            outputs=[self.evaluation_cost, self.variational_cost_acc, self.softmax_cost, self.variational_cost, self.latent_utterance_variable_approx_posterior_mean_var], 
                                             updates=self.state_updates,
                                             on_unused_input='warn', name="eval_fn")
         return self.eval_fn
@@ -1321,7 +1334,7 @@ class DialogEncoderDecoder(Model):
             # Compile functions
             logger.debug("Building grad eval function")
             self.grads_eval_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_cost_mask, self.x_semantic_targets, self.x_reset_mask, self.ran_cost_utterance, self.x_dropmask], 
-                                            outputs=[self.softmax_cost_acc, self.variational_cost, self.grads_wrt_softmax_cost, self.grads_wrt_variational_cost],
+                                            outputs=[self.softmax_cost_acc, self.variational_cost_acc, self.grads_wrt_softmax_cost, self.grads_wrt_variational_cost],
                                             on_unused_input='warn', name="eval_fn")
         return self.grads_eval_fn
 
@@ -1735,13 +1748,15 @@ class DialogEncoderDecoder(Model):
                   ) / 2
 
             #self.variational_cost = T.sum(kl_divergences_between_prior_and_posterior * self.x_cost_mask[1:self.x_max_length]) * (T.sum(T.eq(training_x, self.eos_sym)) / (T.sum(training_x_cost_mask_flat)))
-            self.variational_cost = T.sum(kl_divergences_between_prior_and_posterior * latent_variable_mask)
+            self.variational_cost = kl_divergences_between_prior_and_posterior * latent_variable_mask
+            self.variational_cost_acc = T.sum(self.variational_cost)
 
             self.tmp_normalizing_constant_a = T.sum(latent_variable_mask) 
             self.tmp_normalizing_constant_b = T.sum(training_x_cost_mask_flat)
 
         else:
-            self.variational_cost = theano.shared(value=numpy.float(0))
+            self.variational_cost = 0*latent_variable_mask
+            self.variational_cost_acc = theano.shared(value=numpy.float(0))
             self.latent_utterance_variable_approx_posterior_mean_var = theano.shared(value=numpy.float(0))
 
 
@@ -1806,20 +1821,20 @@ class DialogEncoderDecoder(Model):
         # Compute training cost as variational lower bound with possible annealing of KL-divergence term
         if self.add_latent_gaussian_per_utterance:
             if self.train_latent_gaussians_with_kl_divergence_annealing:
-                self.evaluation_cost = self.training_cost + self.variational_cost
+                self.evaluation_cost = self.training_cost + self.variational_cost_acc
 
                 self.variational_cost_weight = add_to_params(self.global_params, theano.shared(value=numpy.float32(0), name='variational_cost_weight'))
-                self.training_cost = self.training_cost + self.variational_cost_weight*self.variational_cost
+                self.training_cost = self.training_cost + self.variational_cost_weight*self.variational_cost_acc
             else:
-                self.training_cost += self.variational_cost
+                self.training_cost += self.variational_cost_acc
                 self.evaluation_cost = self.training_cost
 
             # Compute gradient of utterance decoder Wd_hh for debugging purposes
             self.grads_wrt_softmax_cost = T.grad(self.softmax_cost_acc, self.utterance_decoder.Wd_hh)
             if self.bidirectional_utterance_encoder:
-                self.grads_wrt_variational_cost = T.grad(self.variational_cost, self.utterance_encoder_forward.W_in)
+                self.grads_wrt_variational_cost = T.grad(self.variational_cost_acc, self.utterance_encoder_forward.W_in)
             else:
-                self.grads_wrt_variational_cost = T.grad(self.variational_cost, self.utterance_encoder.W_in)
+                self.grads_wrt_variational_cost = T.grad(self.variational_cost_acc, self.utterance_encoder.W_in)
         else:
             self.evaluation_cost = self.training_cost
 
