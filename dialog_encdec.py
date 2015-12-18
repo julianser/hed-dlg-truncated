@@ -4,8 +4,7 @@ The code is inspired from nmt encdec code in groundhog
 but we do not rely on groundhog infrastructure.
 """
 __docformat__ = 'restructedtext en'
-__authors__ = ("Alessandro Sordoni, Iulian Vlad Serban")
-__contact__ = "Alessandro Sordoni <sordonia@iro.umontreal>"
+__authors__ = ("Iulian Vlad Serban")
 
 import theano
 import theano.tensor as T
@@ -1496,9 +1495,6 @@ class DialogEncoderDecoder(Model):
            state['train_latent_gaussians_with_batch_normalization'] = False
         if not 'train_latent_gaussians_with_kl_divergence_annealing' in state:
            state['train_latent_gaussians_with_kl_divergence_annealing'] = False
-
-        if state['condition_latent_variable_on_dialogue_encoder']:
-            assert state['add_latent_gaussian_per_utterance']
 
         if state['condition_latent_variable_on_dcgm_encoder']:
             assert state['add_latent_gaussian_per_utterance']
