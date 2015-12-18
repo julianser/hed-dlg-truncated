@@ -1467,9 +1467,6 @@ class DialogEncoderDecoder(Model):
 
         if not 'fix_encoder_parameters' in state:
             state['fix_encoder_parameters'] = False
-        else:
-            if state['fix_encoder_parameters']:
-                assert state['collaps_to_standard_rnn'] == False
 
         if not 'decoder_drop_previous_input_tokens' in state:
             state['decoder_drop_previous_input_tokens'] = False
