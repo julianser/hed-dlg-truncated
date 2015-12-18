@@ -1744,7 +1744,7 @@ class DialogEncoderDecoder(Model):
             self.tmp_normalizing_constant_b = T.sum(training_x_cost_mask_flat)
 
         else:
-            self.variational_cost = 0*latent_variable_mask
+            self.variational_cost = training_x_cost_mask*0
             self.variational_cost_acc = theano.shared(value=numpy.float(0))
             self.latent_utterance_variable_approx_posterior_mean_var = theano.shared(value=numpy.float(0))
 
