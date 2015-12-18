@@ -1493,11 +1493,7 @@ class DialogEncoderDecoder(Model):
         if not 'train_latent_gaussians_with_kl_divergence_annealing' in state:
            state['train_latent_gaussians_with_kl_divergence_annealing'] = False
 
-        if state['condition_latent_variable_on_dcgm_encoder']:
-            assert state['add_latent_gaussian_per_utterance']
-
         if state['train_latent_gaussians_with_kl_divergence_annealing']:
-            assert state['add_latent_gaussian_per_utterance']
             assert state['kl_divergence_annealing_rate']
 
         self.state = state
