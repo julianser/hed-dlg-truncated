@@ -222,6 +222,20 @@ class Sampler(object):
                     # We finished sampling
                     fin_gen.append(hypothesis)
                     fin_costs.append(cost)
+                elif self.model.eod_sym in hypothesis: # End of dialogue detected
+                    new_hypothesis = []
+                    for wrd in hypothesis:
+                        new_hypothesis += [wrd]
+                        if wrd == self.model.eod_sym:
+                            break
+                    hypothesis = new_hypothesis
+
+                    if verbose:
+                        logger.debug("adding sentence {} from beam {}".format(hypothesis, beam_ind))
+
+                    # We finished sampling
+                    fin_gen.append(hypothesis)
+                    fin_costs.append(cost)
                 else:
                     # Hypothesis recombination
                     # TODO: pick the one with lowest cost 

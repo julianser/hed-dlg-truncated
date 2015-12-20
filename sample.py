@@ -40,7 +40,7 @@ def parse_args():
             help="Path to the model prefix (without _model.npz or _state.pkl)")
 
     parser.add_argument("context",
-            help="File of input contexts (pair of sentences, tab separated)")
+            help="File of input contexts")
 
     parser.add_argument("output",
             help="Output file")
@@ -56,10 +56,6 @@ def parse_args():
     parser.add_argument("--n-turns",
                         default=1, type=int,
                         help="Number of dialog turns to generate")
-
-    parser.add_argument("--normalize",
-            action="store_true", default=False,
-            help="Normalize log-prob with the word count")
 
     parser.add_argument("--verbose",
             action="store_true", default=False,
@@ -95,20 +91,27 @@ def main():
     contexts = [[]]
     lines = open(args.context, "r").readlines()
     if len(lines):
-        contexts = [x.strip().split('\t') for x in lines]
+        contexts = [x.strip() for x in lines]
     
+    print('Sampling started...')
     context_samples, context_costs = sampler.sample(contexts,
                                             n_samples=args.n_samples,
                                             n_turns=args.n_turns,
                                             ignore_unk=args.ignore_unk,
                                             verbose=args.verbose)
+    print('Sampling finished.')
+    print('Saving to file...')
      
     # Write to output file
     output_handle = open(args.output, "w")
     for context_sample in context_samples:
         print >> output_handle, '\t'.join(context_sample)
     output_handle.close()
+    print('Saving to file finished.')
+    print('All done!')
 
 if __name__ == "__main__":
+    # THEANO_FLAGS=mode=FAST_RUN,floatX=float32,device=gpu python sample.py ../ModelsForAlex/LSTM/1441312691.38_MovieScriptModel Test_SplitByDialogues_TestContexts.txt GeneratedResponses.txt --beam_search --n-samples=100 --ignore-unk --verbose &> TTT.txt
+    # awk -F "\t" '{print $1}' GeneratedResponses.txt &> First_GeneratedResponses.txt
     main()
 
