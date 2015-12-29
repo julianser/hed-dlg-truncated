@@ -1921,7 +1921,8 @@ class DialogEncoderDecoder(Model):
         self.beam_hs = T.matrix("beam_hs")
         self.beam_step_num = T.lscalar("beam_step_num")
         self.beam_hd = T.matrix("beam_hd")
-        self.beam_ran_cost_utterance = T.fvector('beam_ran_cost_utterance')
+        self.beam_ran_cost_utterance = T.matrix('beam_ran_cost_utterance')
+
 
         # DEBUG CODE USED TO COMPARE TO NO-TRUNCATED VERSION
         #self.get_hs_func = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_cost_mask, self.x_semantic_targets, self.x_reset_mask], outputs=self.hd, updates=self.state_updates, on_unused_input='warn', name="get_hs_fn")

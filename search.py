@@ -148,6 +148,9 @@ class Sampler(object):
         costs = [0. for i in range(n_samples)]
         beam_empty = False
 
+        # Compute random vector as additional input
+        ran_vectors = self.model.rng.normal(size=(n_samples,self.model.latent_gaussian_per_utterance_dim)).astype('float32')
+
         for k in range(max_length):
             if len(fin_gen) >= n_samples or beam_empty:
                 break
@@ -171,22 +174,18 @@ class Sampler(object):
 
             prev_words = context[-1, :]
            
-            # Recompute hs only for those particular sentences
-            # that met the end-of-sentence token
+            # Recompute encoder states, hs and random variables 
+            # only for those particular sentences that meet the end-of-sentence token
             indx_update_hs = [num for num, prev_word in enumerate(prev_words)
                                 if prev_word == self.model.eos_sym]
             if len(indx_update_hs):
                 encoder_states = self.compute_encoding(context[:, indx_update_hs], reversed_context[:, indx_update_hs], self.max_len, semantic_info)
                 prev_hs[indx_update_hs] = encoder_states[1][-1]
+                ran_vectors[indx_update_hs,:] = self.model.rng.normal(size=(len(indx_update_hs),self.model.latent_gaussian_per_utterance_dim)).astype('float32')
 
-            # Compute random vector as additional input
-            ran_vector = self.model.rng.normal(size=(self.model.latent_gaussian_per_utterance_dim)).astype('float32')
-
-            # HACK
-            #ran_vector = 10*self.model.rng.normal(size=(self.model.latent_gaussian_per_utterance_dim)).astype('float32')
 
             # ... done
-            next_probs, new_hd = self.next_probs_predictor(prev_hs, prev_hd, prev_words, context, ran_vector)
+            next_probs, new_hd = self.next_probs_predictor(prev_hs, prev_hd, prev_words, context, ran_vectors)
 
             assert next_probs.shape[1] == self.model.idim
             
@@ -195,6 +194,7 @@ class Sampler(object):
                 next_probs[:, self.model.unk_sym] = 0
             if k <= min_length:
                 next_probs[:, self.model.eos_sym] = 0
+                next_probs[:, self.model.eod_sym] = 0
              
             # Update costs 
             next_costs = numpy.array(costs)[:, None] - numpy.log(next_probs)
@@ -255,7 +255,7 @@ class Sampler(object):
 
             prev_hd = new_hd[new_sources]
             prev_hs = prev_hs[new_sources]
-            
+            ran_vectors = ran_vectors[new_sources,:]
             context = context[:, new_sources]
             reversed_context = reversed_context[:, new_sources]
             gen = new_gen

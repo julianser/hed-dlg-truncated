@@ -453,6 +453,52 @@ def prototype_twitter():
 
     return state
 
+def prototype_twitter_lstm():
+    state = prototype_state()
+    
+    # Fill your paths here! 
+    state['train_dialogues'] = "../TwitterData/Training.dialogues.pkl"
+    state['test_dialogues'] = "../TwitterData/Test.dialogues.pkl"
+    state['valid_dialogues'] = "../TwitterData/Validation.dialogues.pkl"
+    state['dictionary'] = "../TwitterData/Dataset.dict.pkl" 
+    state['save_dir'] = "Output" 
+
+    # Gradients will be truncated after 80 steps. This seems like a fair start.
+    state['max_grad_steps'] = 80
+    
+    # Validation frequency
+    state['valid_freq'] = 5000
+    
+    state['prefix'] = "TwitterModel_" 
+    state['updater'] = 'adam'
+    
+    # Model architecture
+    state['bidirectional_utterance_encoder'] = False
+    state['add_latent_gaussian_per_utterance'] = False
+    state['latent_gaussian_per_utterance_dim'] = 20
+    state['deep_dialogue_input'] = True
+    state['deep_out'] = True
+
+    state['collaps_to_standard_rnn'] = True
+ 
+    state['bs'] = 80 # If out of memory, modify this!
+    state['decoder_bias_type'] = 'all' # Choose between 'first', 'all' and 'selective' 
+    state['direct_connection_between_encoders_and_decoder'] = False
+    state['deep_direct_connection'] = False
+
+    state['reset_utterance_decoder_at_end_of_utterance'] = False
+    state['reset_utterance_encoder_at_end_of_utterance'] = False
+    state['lr'] = 0.0001
+
+
+    state['qdim_encoder'] = 10
+    state['qdim_decoder'] = 2000
+    # Dimensionality of dialogue hidden layer 
+    state['sdim'] = 10
+    # Dimensionality of low-rank approximation
+    state['rankdim'] = 400
+
+    return state
 
 def prototype_twitter_variational():
     state = prototype_state()

@@ -16,9 +16,9 @@ The script assumes one example per line (e.g. one dialogue or one sentence per l
 
 References:
 
-A Comparison of Greedy and Optimal Assessment of Natural Language Student Input Word Similarity Metrics Using Word to Word Similarity Metrics. Vasile Rus, Mihai Lintean. 2012. Proceedings of the Seventh Workshop on Building Educational Applications Using NLP.
+A Comparison of Greedy and Optimal Assessment of Natural Language Student Input Word Similarity Metrics Using Word to Word Similarity Metrics. Vasile Rus, Mihai Lintean. 2012. Proceedings of the Seventh Workshop on Building Educational Applications Using NLP, NAACL 2012.
 
-Bootstrapping Dialog Systems with Word Embeddings. G. Forgues, J. Pineau. 2014. Workshop on Modern Machine Learning and Natural Language Processing, NIPS 2014.
+Bootstrapping Dialog Systems with Word Embeddings. G. Forgues, J. Pineau, J. Larcheveque, R. Tremblay. 2014. Workshop on Modern Machine Learning and Natural Language Processing, NIPS 2014.
 
 
 """
