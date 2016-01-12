@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import cPickle
 
 def prototype_state():
     state = {} 
@@ -153,6 +154,13 @@ def prototype_state():
     # The rate at which the previous token input to the decoder is kept (i.e. not set to 'unk').
     # Setting this to zero effectively disables teacher-forcing in the model.
     state['decoder_drop_previous_input_tokens_rate'] = 0.75
+
+    # If enabled, the log-likelihood of each token will be multiplied by (1 + beta * weight(w)) / max(1, beta), 
+    # where weight(w) are weights of each words given by the values in the dictionary 
+    # 'weight_token_loglikelihoods_dictionary'. Setting beta=10.0 appears to work.
+    state['weight_token_loglikelihoods'] = False
+    state['weight_token_loglikelihoods_dictionary'] = {}
+    state['weight_token_loglikelihoods_beta'] = 10.0
 
     # Initialization configuration
     state['initialize_from_pretrained_word_embeddings'] = False
@@ -405,6 +413,11 @@ def prototype_movies():
     # Dimensionality of low-rank approximation
     state['rankdim'] = 300
 
+    # If enabled, the log-likelihood of each token will be multiplied by the values found in the dictionary 
+    # given by the state variable 'weight_token_loglikelihoods_dictionary'
+    state['weight_token_loglikelihoods'] = False
+    state['weight_token_loglikelihoods_dictionary'] = {}
+
     return state
 
 
@@ -551,8 +564,105 @@ def prototype_twitter_variational():
     # Dimensionality of dialogue hidden layer 
     state['sdim'] = 1000
     # Dimensionality of low-rank approximation
-    state['rankdim'] = 500
+    state['rankdim'] = 400
 
     return state
 
 
+def prototype_weighted_movies():
+    state = prototype_state()
+
+    # Fill your paths here!
+    # Fill your paths here!
+    #state['train_dialogues'] = "../Data/Training.dialogues.pkl"
+    state['train_dialogues'] = "../Data/OpenSubtitles.dialogues.pkl"
+    state['test_dialogues'] = "../Data/Test.dialogues.pkl"
+    state['valid_dialogues'] = "../Data/Validation.dialogues.pkl"
+    state['dictionary'] = "../Data/Dataset.dict.pkl"
+    state['save_dir'] = "Output"
+
+    # Gradients will be truncated after 80 steps. This seems like a fair start.
+    state['max_grad_steps'] = 80
+
+    # Validation frequency
+    state['valid_freq'] = 5000
+
+    state['prefix'] = "HREDWeightedModel_"
+    state['updater'] = 'adam'
+
+    # Model architecture
+    state['bidirectional_utterance_encoder'] = True
+    state['add_latent_gaussian_per_utterance'] = False
+    state['latent_gaussian_per_utterance_dim'] = 20
+    state['deep_dialogue_input'] = True
+    state['deep_out'] = True
+
+    state['bs'] = 80 # If out of memory, modify this!
+    state['decoder_bias_type'] = 'selective'
+    state['direct_connection_between_encoders_and_decoder'] = False
+    state['deep_direct_connection'] = False
+
+    state['reset_utterance_decoder_at_end_of_utterance'] = True
+    state['reset_utterance_encoder_at_end_of_utterance'] = False
+    state['lr'] = 0.0001
+
+
+    state['qdim_encoder'] = 2000
+    state['qdim_decoder'] = 4000
+    # Dimensionality of dialogue hidden layer
+    state['sdim'] = 1000
+    # Dimensionality of low-rank approximation
+    state['rankdim'] = 500
+
+    state['weight_token_loglikelihoods'] = True
+    state['weight_token_loglikelihoods_dictionary'] = cPickle.load(open('../Data/wrd2weight.pkl', 'r'))
+
+    return state
+
+def prototype_weighted_twitter():
+    state = prototype_state()
+    
+    # Fill your paths here! 
+    state['train_dialogues'] = "../TwitterData/Training.dialogues.pkl"
+    state['test_dialogues'] = "../TwitterData/Test.dialogues.pkl"
+    state['valid_dialogues'] = "../TwitterData/Validation.dialogues.pkl"
+    state['dictionary'] = "../TwitterData/Dataset.dict.pkl" 
+    state['save_dir'] = "Output" 
+
+    # Gradients will be truncated after 80 steps. This seems like a fair start.
+    state['max_grad_steps'] = 80
+    
+    # Validation frequency
+    state['valid_freq'] = 5000
+    
+    state['prefix'] = "TwitterModel_" 
+    state['updater'] = 'adam'
+    
+    # Model architecture
+    state['bidirectional_utterance_encoder'] = True
+    state['add_latent_gaussian_per_utterance'] = False
+    state['latent_gaussian_per_utterance_dim'] = 20
+    state['deep_dialogue_input'] = True
+    state['deep_out'] = True
+ 
+    state['bs'] = 80 # If out of memory, modify this!
+    state['decoder_bias_type'] = 'selective' # Choose between 'first', 'all' and 'selective' 
+    state['direct_connection_between_encoders_and_decoder'] = False
+
+    state['reset_utterance_decoder_at_end_of_utterance'] = True
+    state['reset_utterance_encoder_at_end_of_utterance'] = False
+    state['lr'] = 0.0001
+
+
+    state['qdim_encoder'] = 1000
+    state['qdim_decoder'] = 1000
+    # Dimensionality of dialogue hidden layer 
+    state['sdim'] = 1000
+    # Dimensionality of low-rank approximation
+    state['rankdim'] = 400
+
+
+    state['weight_token_loglikelihoods'] = True
+    state['weight_token_loglikelihoods_dictionary'] = cPickle.load(open('../TwitterData/wrd2weight.pkl', 'r'))
+
+    return state

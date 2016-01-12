@@ -260,6 +260,7 @@ def main(args):
         x_data_reversed = batch['x_reversed']
         max_length = batch['max_length']
         x_cost_mask = batch['x_mask']
+        x_cost_weight = batch['x_weight']
         x_semantic = batch['x_semantic']
         x_reset = batch['x_reset']
         ran_cost_utterance = batch['ran_var_constutterance']
@@ -272,9 +273,9 @@ def main(args):
 
         if state['use_nce']:
             y_neg = rng.choice(size=(10, max_length, x_data.shape[1]), a=model.idim, p=model.noise_probs).astype('int32')
-            c, variational_cost, posterior_mean_variance = train_batch(x_data, x_data_reversed, y_neg, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
+            c, variational_cost, posterior_mean_variance = train_batch(x_data, x_data_reversed, y_neg, max_length, x_cost_mask, x_cost_weight, x_semantic, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
         else:
-            c, variational_cost, posterior_mean_variance = train_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
+            c, variational_cost, posterior_mean_variance = train_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_cost_weight, x_semantic, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
 
         print 'cost_sum', c
         print 'cost_mean', c / float(numpy.sum(x_cost_mask))
@@ -353,7 +354,7 @@ def main(args):
                 batch = add_random_variables_to_batch(model.state, model.rng, batch, None, False)
                 ran_cost_utterance = batch['ran_var_constutterance']
                 ran_decoder_drop_mask = batch['ran_decoder_drop_mask']
-                softmax_cost, var_cost, grads_wrt_softmax, grads_wrt_variational_cost = eval_grads(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
+                softmax_cost, var_cost, grads_wrt_softmax, grads_wrt_variational_cost = eval_grads(x_data, x_data_reversed, max_length, x_cost_mask, x_cost_weight, x_semantic, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
                 softmax_costs[k] = softmax_cost
                 var_costs[k] = var_cost
                 gradients_wrt_softmax[k, :, :] = grads_wrt_softmax
@@ -438,13 +439,14 @@ def main(args):
                     x_data_reversed = batch['x_reversed']
                     max_length = batch['max_length']
                     x_cost_mask = batch['x_mask']
+                    x_cost_weight = batch['x_weight']
                     x_semantic = batch['x_semantic']
 
                     x_reset = batch['x_reset']
                     ran_cost_utterance = batch['ran_var_constutterance']
                     ran_decoder_drop_mask = batch['ran_decoder_drop_mask']
 
-                    c, kl_term, c_list, kl_term_list, posterior_mean_variance = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
+                    c, kl_term, c_list, kl_term_list, posterior_mean_variance = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_cost_weight, x_semantic, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
                     print 'c_list', c_list
                     print 'kl_term_list', kl_term_list
 

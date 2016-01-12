@@ -1290,7 +1290,7 @@ class DialogEncoderDecoder(Model):
             logger.debug("Building train function")
                 
             self.train_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, 
-                                                         self.x_max_length, self.x_cost_mask,
+                                                         self.x_max_length, self.x_cost_mask, self.x_cost_weight,
                                                          self.x_semantic_targets, self.x_reset_mask, 
                                                          self.ran_cost_utterance, self.x_dropmask],
                                             outputs=[self.training_cost, self.variational_cost_acc, self.latent_utterance_variable_approx_posterior_mean_var],
@@ -1307,7 +1307,7 @@ class DialogEncoderDecoder(Model):
 
             self.nce_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, 
                                                   self.y_neg, self.x_max_length, 
-                                                  self.x_cost_mask, self.x_semantic_targets, 
+                                                  self.x_cost_mask, self.x_cost_weight, self.x_semantic_targets, 
                                                   self.x_reset_mask, self.ran_cost_utterance, 
                                                   self.x_dropmask],
                                             outputs=[self.training_cost, self.variational_cost_acc, self.latent_utterance_variable_approx_posterior_mean_var],
@@ -1321,7 +1321,7 @@ class DialogEncoderDecoder(Model):
         if not hasattr(self, 'eval_fn'):
             # Compile functions
             logger.debug("Building evaluation function")
-            self.eval_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_cost_mask, self.x_semantic_targets, self.x_reset_mask, self.ran_cost_utterance, self.x_dropmask], 
+            self.eval_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_cost_mask, self.x_cost_weight, self.x_semantic_targets, self.x_reset_mask, self.ran_cost_utterance, self.x_dropmask], 
                                             outputs=[self.evaluation_cost, self.variational_cost_acc, self.softmax_cost, self.variational_cost, self.latent_utterance_variable_approx_posterior_mean_var], 
                                             updates=self.state_updates,
                                             on_unused_input='warn', name="eval_fn")
@@ -1332,7 +1332,7 @@ class DialogEncoderDecoder(Model):
         if not hasattr(self, 'grads_eval_fn'):
             # Compile functions
             logger.debug("Building grad eval function")
-            self.grads_eval_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_cost_mask, self.x_semantic_targets, self.x_reset_mask, self.ran_cost_utterance, self.x_dropmask], 
+            self.grads_eval_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, self.x_max_length, self.x_cost_mask, self.x_cost_weight, self.x_semantic_targets, self.x_reset_mask, self.ran_cost_utterance, self.x_dropmask], 
                                             outputs=[self.softmax_cost_acc, self.variational_cost_acc, self.grads_wrt_softmax_cost, self.grads_wrt_variational_cost],
                                             on_unused_input='warn', name="eval_fn")
         return self.grads_eval_fn
@@ -1537,6 +1537,7 @@ class DialogEncoderDecoder(Model):
         self.x_data = T.imatrix('x_data')
         self.x_data_reversed = T.imatrix('x_data_reversed')
         self.x_cost_mask = T.matrix('cost_mask')
+        self.x_cost_weight = T.matrix('cost_weight')
         self.x_reset_mask = T.vector('reset_mask')
         self.x_max_length = T.iscalar('x_max_length')
         self.x_semantic_targets = T.imatrix('x_semantic')
@@ -1556,6 +1557,9 @@ class DialogEncoderDecoder(Model):
         training_hs_mask = T.neq(training_x, self.eos_sym)
         training_x_cost_mask = self.x_cost_mask[1:self.x_max_length]
         training_x_cost_mask_flat = training_x_cost_mask.flatten()
+
+        training_x_cost_weight = self.x_cost_weight[1:self.x_max_length]
+        training_x_cost_weight_flat = training_x_cost_weight.flatten()
         
         # Backward compatibility
         if 'decoder_bias_type' in self.state:
@@ -1793,12 +1797,12 @@ class DialogEncoderDecoder(Model):
             target_probs, self.hd, self.utterance_decoder_states, target_probs_full_matrix = self.utterance_decoder.build_decoder(self.hd_input, training_x, xmask=training_hs_mask, xdropmask=training_x_dropmask, y=training_y, mode=UtteranceDecoder.EVALUATION, prev_state=self.phd)
 
         # Prediction cost and rank cost
-        self.contrastive_cost = T.sum(contrastive_cost.flatten() * training_x_cost_mask_flat)
-        self.softmax_cost = -T.log(target_probs) * training_x_cost_mask_flat
+        self.contrastive_cost = T.sum(contrastive_cost.flatten() * training_x_cost_mask_flat * training_x_cost_weight_flat)
+        self.softmax_cost = -T.log(target_probs) * training_x_cost_mask_flat * training_x_cost_weight_flat
         self.softmax_cost_acc = T.sum(self.softmax_cost)
 
         # Prediction accuracy
-        self.training_misclassification = T.neq(T.argmax(target_probs_full_matrix, axis=2), training_y).flatten() * training_x_cost_mask_flat
+        self.training_misclassification = T.neq(T.argmax(target_probs_full_matrix, axis=2), training_y).flatten() * training_x_cost_mask_flat * training_x_cost_weight_flat
 
         self.training_misclassification_acc = T.sum(self.training_misclassification)
 

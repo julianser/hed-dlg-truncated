@@ -105,6 +105,7 @@ def create_padded_batch(state, rng, x, force_end_of_utterance_token = False):
     
     X = numpy.zeros((mx, n), dtype='int32')
     Xmask = numpy.zeros((mx, n), dtype='float32') 
+    Xweight = numpy.ones((mx, n), dtype='float32') 
 
     # Variable to store each utterance in reverse form (for bidirectional RNNs)
     X_reversed = numpy.zeros((mx, n), dtype='int32')
@@ -112,7 +113,7 @@ def create_padded_batch(state, rng, x, force_end_of_utterance_token = False):
     # Variable to store random vector sampled at the beginning of each utterance
     #Ran_Var_ConstUtterance = numpy.zeros((mx, n, state['latent_gaussian_per_utterance_dim']), dtype='float32')
 
-    # Fill X and Xmask
+    # Fill X, Xmask and Xweight (if weighting tokens is enabled)
     # Keep track of number of predictions and maximum dialogue length
     num_preds = 0
     max_length = 0
@@ -132,6 +133,7 @@ def create_padded_batch(state, rng, x, force_end_of_utterance_token = False):
         else:
             X[:dialogue_length, idx] = x[0][idx][:dialogue_length]
 
+        # Keep track of longest dialogue
         max_length = max(max_length, dialogue_length)
 
         # Set the number of predictions == sum(Xmask), for cost purposes, minus one (to exclude first eos symbol)
@@ -158,6 +160,15 @@ def create_padded_batch(state, rng, x, force_end_of_utterance_token = False):
             if prev_eos_index > dialogue_length:
                 break
 
+        if state['weight_token_loglikelihoods']:
+            rescale = 1.0
+            if state['weight_token_loglikelihoods_beta'] > 1.0:
+                rescale = 1.0 / state['weight_token_loglikelihoods_beta']
+
+            for j in range(dialogue_length):
+                Xweight[j,idx] = (state['weight_token_loglikelihoods_dictionary'].get(X[j,idx], 1.0) + state['weight_token_loglikelihoods_beta'])*rescale
+
+
         # Sample random variables (we want to avoid Theano's random sampling to speed up the process...)
         #ran_vectors = rng.normal(loc=0, scale=1, size=(len(eos_indices), state['latent_gaussian_per_utterance_dim']))
         #for i in range(len(eos_indices)-1):
@@ -172,6 +183,7 @@ def create_padded_batch(state, rng, x, force_end_of_utterance_token = False):
     return {'x': X,                                                 \
             'x_reversed': X_reversed,                               \
             'x_mask': Xmask,                                        \
+            'x_weight': Xweight,                                    \
             'num_preds': num_preds,                                 \
             'num_dialogues': len(x[0]),                             \
             'max_length': max_length                                \
@@ -261,6 +273,7 @@ class Iterator(SSIterator):
                     batch['x'] = full_batch['x'][start_pos:end_pos, :]
                     batch['x_reversed'] = full_batch['x_reversed'][start_pos:end_pos, :]
                     batch['x_mask'] = full_batch['x_mask'][start_pos:end_pos, :]
+                    batch['x_weight'] = full_batch['x_weight'][start_pos:end_pos, :]
                     batch['max_length'] = end_pos - start_pos
                     batch['num_preds'] = numpy.sum(batch['x_mask']) - numpy.sum(batch['x_mask'][0,:])
 
