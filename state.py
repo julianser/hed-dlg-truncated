@@ -666,3 +666,67 @@ def prototype_weighted_twitter():
     state['weight_token_loglikelihoods_dictionary'] = cPickle.load(open('../TwitterData/wrd2weight.pkl', 'r'))
 
     return state
+
+
+def prototype_ubuntu_HRED_LSTM_Decoder():
+    state = prototype_state()
+
+    state['end_sym_sentence'] = '__eot__'
+
+    state['unk_sym'] = 0 # Unknown word token <unk>
+    state['eos_sym'] = 1 # end-of-utterance symbol </s>
+    state['eod_sym'] = -1 # end-of-dialogue symbol </d>
+    state['first_speaker_sym'] = -1 # first speaker symbol <first_speaker>
+    state['second_speaker_sym'] = -1 # second speaker symbol <second_speaker>
+    state['third_speaker_sym'] = -1 # third speaker symbol <third_speaker>
+    state['minor_speaker_sym'] = -1 # minor speaker symbol <minor_speaker>
+    state['voice_over_sym'] = -1 # voice over symbol <voice_over>
+    state['off_screen_sym'] = -1 # off screen symbol <off_screen>
+    state['pause_sym'] = -1 # pause symbol <pause>
+
+    # Fill your paths here!
+    state['train_dialogues'] = "../UbuntuData/Training.dialogues.pkl"
+    state['test_dialogues'] = "../UbuntuData/Test.dialogues.pkl"
+    state['valid_dialogues'] = "../UbuntuData/Validation.dialogues.pkl"
+    state['dictionary'] = "../UbuntuData/Dataset.dict.pkl"
+    state['save_dir'] = "Output"
+
+    # Gradients will be truncated after 80 steps. This seems like a fair start.
+    state['max_grad_steps'] = 80
+
+    # Validation frequency
+    state['valid_freq'] = 5000
+
+    state['prefix'] = "UbuntuModel_HRED_"
+    state['updater'] = 'adam'
+
+    # Model architecture
+    state['bidirectional_utterance_encoder'] = False
+    state['add_latent_gaussian_per_utterance'] = False
+
+    state['latent_gaussian_per_utterance_dim'] = 20
+    state['deep_dialogue_input'] = True
+    state['deep_out'] = True
+
+    state['collaps_to_standard_rnn'] = False
+
+    state['bs'] = 80 # If out of memory, modify this!
+    state['decoder_bias_type'] = 'all' # Choose between 'first', 'all' and 'selective'
+    state['direct_connection_between_encoders_and_decoder'] = False
+    state['deep_direct_connection'] = False
+
+    state['reset_utterance_decoder_at_end_of_utterance'] = True
+    state['reset_utterance_encoder_at_end_of_utterance'] = True
+    state['lr'] = 0.0002
+
+    state['qdim_encoder'] = 500
+    state['qdim_decoder'] = 500
+    # Dimensionality of dialogue hidden layer
+    state['sdim'] = 1000
+    # Dimensionality of low-rank approximation
+    state['rankdim'] = 300
+
+    state['utterance_decoder_gating'] = 'LSTM' # Supports 'None', 'GRU' and 'LSTM'
+
+    return state
+

@@ -184,7 +184,11 @@ class UtteranceEncoder(EncoderDecoderBase):
             _res = f_enc(xe, rolled_xmask, [h_0])[0]
 
         # Get the hidden state sequence
-        h = _res[0]
+        if utterance_encoder_gating != 'GRU':
+           h = _res
+        else:
+           h = _res[0]
+
         return h
 
     def __init__(self, state, rng, word_embedding_param, parent, name):
@@ -629,7 +633,7 @@ class UtteranceDecoder(EncoderDecoderBase):
                 # c_{n-1} -> g_r
                 self.Wd_sel_c = add_to_params(self.params, \
                                           theano.shared(value=NormalInit(self.rng, self.qdim_decoder, self.input_dim), \
-                                                        name='Wd_sel_h'))
+                                                        name='Wd_sel_c'))
             else:
                 self.bd_sel = add_to_params(self.params, theano.shared(value=np.zeros((self.input_dim,), dtype='float32'), name='bd_sel'))
                 self.Wd_s_q = add_to_params(self.params, theano.shared(value=NormalInit(self.rng, self.input_dim, self.qdim_decoder), name='Wd_s_q'))
@@ -1520,11 +1524,7 @@ class DialogEncoderDecoder(Model):
         self.word_freq = dict([(tok_id, freq) for _, tok_id, freq, _ in raw_dict])
         self.document_freq = dict([(tok_id, df) for _, tok_id, _, df in raw_dict])
 
-        #if '</s>' not in self.str_to_idx \
-        #   or '</d>' not in self.str_to_idx:
-        #   raise Exception("Error, malformed dictionary!")
-
-        if '</s>' not in self.str_to_idx:
+        if self.end_sym_sentence not in self.str_to_idx:
            raise Exception("Error, malformed dictionary!")
          
         # Number of words in the dictionary 
