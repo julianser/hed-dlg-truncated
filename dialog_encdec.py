@@ -184,7 +184,7 @@ class UtteranceEncoder(EncoderDecoderBase):
             _res = f_enc(xe, rolled_xmask, [h_0])[0]
 
         # Get the hidden state sequence
-        if utterance_encoder_gating != 'GRU':
+        if self.utterance_encoder_gating != 'GRU':
            h = _res
         else:
            h = _res[0]
@@ -1303,6 +1303,21 @@ class DialogEncoderDecoder(Model):
                                             name="train_fn")
 
         return self.train_fn
+
+    def build_decoder_encoding(self):
+        if not hasattr(self, 'decoder_encoding_fn'):
+            # Compile functions
+            logger.debug("Building decoder encoding function")
+                
+            self.decoder_encoding_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, 
+                                                         self.x_max_length, self.x_cost_mask, self.x_cost_weight,
+                                                         self.x_semantic_targets, self.x_reset_mask, 
+                                                         self.ran_cost_utterance, self.x_dropmask],
+                                            outputs=[self.hd],
+                                            on_unused_input='warn', 
+                                            name="decoder_encoding_fn")
+
+        return self.decoder_encoding_fn
     
     def build_nce_function(self):
         if not hasattr(self, 'train_fn'):
@@ -1799,7 +1814,8 @@ class DialogEncoderDecoder(Model):
         # Prediction cost and rank cost
         self.contrastive_cost = T.sum(contrastive_cost.flatten() * training_x_cost_mask_flat * training_x_cost_weight_flat)
         self.softmax_cost = -T.log(target_probs) * training_x_cost_mask_flat * training_x_cost_weight_flat
-        self.softmax_cost_acc = T.sum(self.softmax_cost)
+        # Normalize cost by the cost weights
+        self.softmax_cost_acc = T.sum(self.softmax_cost) / T.maximum(1.0, T.sum(training_x_cost_weight_flat))
 
         # Prediction accuracy
         self.training_misclassification = T.neq(T.argmax(target_probs_full_matrix, axis=2), training_y).flatten() * training_x_cost_mask_flat * training_x_cost_weight_flat

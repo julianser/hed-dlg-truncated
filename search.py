@@ -39,11 +39,18 @@ def sample_wrapper(sample_logic):
             if len(context_sentences) == 0:
                 joined_context = [sampler.model.eos_sym]
             else:
-                joined_context += [sampler.model.eos_sym]
-                for sentence in context_sentences:
-                    sentence_ids = sampler.model.words_to_indices(sentence.split())
-                    # Add sos and eos tokens
-                    joined_context += sentence_ids + [sampler.model.eos_sym]
+                sentence_ids = sampler.model.words_to_indices(context_sentences.split())
+                # Add eos tokens
+                if len(sentence_ids) > 0:
+                    if not sentence_ids[0] == sampler.model.eos_sym:
+                        sentence_ids = [sampler.model.eos_sym] + sentence_ids
+                    if not sentence_ids[-1] == sampler.model.eos_sym:
+                        sentence_ids += [sampler.model.eos_sym]
+                
+                else:
+                    sentence_ids = [sampler.model.eos_sym]
+
+                joined_context += sentence_ids
 
             samples, costs = sample_logic(sampler, joined_context, **kwargs) 
              
@@ -76,6 +83,10 @@ class Sampler(object):
     def compile(self):
         self.next_probs_predictor = self.model.build_next_probs_function()
         self.compute_encoding = self.model.build_encoder_function()
+
+        if not self.model.reset_utterance_decoder_at_end_of_utterance:
+            self.compute_decoder_encoding = self.model.build_decoder_encoding()
+
         self.compiled = True
     
     def select_next_words(self, next_probs, step_num, how_many):
@@ -125,8 +136,6 @@ class Sampler(object):
                 reversed_context[(prev_eos_index+2):eos_index, idx] = (reversed_context[(prev_eos_index+2):eos_index, idx])[::-1]
                 prev_eos_index = eos_index
 
-        prev_hd = numpy.zeros((n_samples, self.model.utterance_decoder.complete_hidden_state_size), dtype='float32')
-
         if self.model.direct_connection_between_encoders_and_decoder:
             if self.model.bidirectional_utterance_encoder:
                 dialog_enc_size = self.model.sdim+self.model.qdim_encoder*2
@@ -140,6 +149,24 @@ class Sampler(object):
                 dialog_enc_size += self.model.semantic_information_dim
 
         prev_hs = numpy.zeros((n_samples, dialog_enc_size), dtype='float32')
+
+        prev_hd = numpy.zeros((n_samples, self.model.utterance_decoder.complete_hidden_state_size), dtype='float32')
+
+        if not self.model.reset_utterance_decoder_at_end_of_utterance:
+            assert self.model.bs >= context.shape[1]
+            enlarged_context = numpy.zeros((context.shape[0], self.model.bs), dtype='int32')
+            enlarged_context[:, 0:context.shape[1]] = context[:]
+            enlarged_reversed_context = numpy.zeros((context.shape[0], self.model.bs), dtype='int32')
+            enlarged_reversed_context[:, 0:context.shape[1]] = reversed_context[:]
+
+            ran_vector = self.model.rng.normal(size=(context.shape[0],n_samples,self.model.latent_gaussian_per_utterance_dim)).astype('float32')
+            zero_mask = numpy.zeros((context.shape[0], self.model.bs), dtype='float32')
+            ones_mask = numpy.zeros((context.shape[0], self.model.bs), dtype='float32')
+
+            # Computes new utterance decoder hidden states (including intermediate utterance encoder and dialogue encoder hidden states)
+            new_hd = self.compute_decoder_encoding(enlarged_context, enlarged_reversed_context, self.max_len, zero_mask, zero_mask, semantic_info, numpy.zeros((self.model.bs), dtype='float32'), ran_vector, ones_mask)
+            prev_hd[:] = new_hd[0][-1][0:context.shape[1], :]
+
 
         fin_gen = []
         fin_costs = []

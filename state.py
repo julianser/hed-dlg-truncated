@@ -162,6 +162,11 @@ def prototype_state():
     state['weight_token_loglikelihoods_dictionary'] = {}
     state['weight_token_loglikelihoods_beta'] = 10.0
 
+
+    # If enabled, the utterance encoder and dialogue encoder states (i.e. the inputs going to the decoder) will have as intermediate target averaged word embeddings of the response (measures w.r.t. L2 distance)
+    state['intermediate_encoder_target'] = False
+    state['intermediate_encoder_target_word_embeddings'] = ''
+
     # Initialization configuration
     state['initialize_from_pretrained_word_embeddings'] = False
     state['pretrained_word_embeddings_file'] = ''
