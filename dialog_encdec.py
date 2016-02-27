@@ -1253,7 +1253,7 @@ class DialogEncoderDecoder(Model):
             eos_indices = numpy.where(seq[:, idx] == self.eos_sym)[0]
             prev_eos_index = -1
             for eos_index in eos_indices:
-                reversed_seq[(prev_eos_index+2):eos_index, idx] = (reversed_seq[(prev_eos_index+2):eos_index, idx])[::-1]
+                reversed_seq[(prev_eos_index+1):eos_index, idx] = (reversed_seq[(prev_eos_index+1):eos_index, idx])[::-1]
                 prev_eos_index = eos_index
 
         return reversed_seq
