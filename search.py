@@ -109,12 +109,6 @@ class Sampler(object):
         verbose = kwargs.get('verbose', False)
         n_turns = kwargs.get('n_turns', 1)
 
-        #TODO: Semantic information is currently fixed to zero. This should be replaced by a random multinoulli vector, where each entry is sampled proportional to its frequency.
-        semantic_info = numpy.zeros((1,1)).astype('int32')
-        if hasattr(self.model, 'add_semantic_information_to_utterance_decoder'):
-            if self.model.add_semantic_information_to_utterance_decoder:
-                semantic_info = numpy.zeros((n_samples, self.model.semantic_information_dim)).astype('int32')
-
         if not self.compiled:
             self.compile()
         
@@ -128,13 +122,7 @@ class Sampler(object):
                             'should be the end of sentence: %d' % self.model.eos_sym)
 
         # Generate the reversed context
-        reversed_context = numpy.copy(context)
-        for idx in range(context.shape[1]):
-            eos_indices = numpy.where(context[:, idx] == self.model.eos_sym)[0]
-            prev_eos_index = -1
-            for eos_index in eos_indices:
-                reversed_context[(prev_eos_index+2):eos_index, idx] = (reversed_context[(prev_eos_index+2):eos_index, idx])[::-1]
-                prev_eos_index = eos_index
+        reversed_context = self.model.reverse_utterances(context)
 
         if self.model.direct_connection_between_encoders_and_decoder:
             if self.model.bidirectional_utterance_encoder:
@@ -143,10 +131,6 @@ class Sampler(object):
                 dialog_enc_size = self.model.sdim+self.model.qdim_encoder
         else:
             dialog_enc_size = self.model.sdim
-
-        if hasattr(self.model, 'add_semantic_information_to_utterance_decoder'):
-            if self.model.add_semantic_information_to_utterance_decoder:
-                dialog_enc_size += self.model.semantic_information_dim
 
         prev_hs = numpy.zeros((n_samples, dialog_enc_size), dtype='float32')
 
@@ -164,7 +148,7 @@ class Sampler(object):
             ones_mask = numpy.zeros((context.shape[0], self.model.bs), dtype='float32')
 
             # Computes new utterance decoder hidden states (including intermediate utterance encoder and dialogue encoder hidden states)
-            new_hd = self.compute_decoder_encoding(enlarged_context, enlarged_reversed_context, self.max_len, zero_mask, zero_mask, semantic_info, numpy.zeros((self.model.bs), dtype='float32'), ran_vector, ones_mask)
+            new_hd = self.compute_decoder_encoding(enlarged_context, enlarged_reversed_context, self.max_len, zero_mask, zero_mask, numpy.zeros((self.model.bs), dtype='float32'), ran_vector, ones_mask)
             prev_hd[:] = new_hd[0][-1][0:context.shape[1], :]
 
 
@@ -206,7 +190,7 @@ class Sampler(object):
             indx_update_hs = [num for num, prev_word in enumerate(prev_words)
                                 if prev_word == self.model.eos_sym]
             if len(indx_update_hs):
-                encoder_states = self.compute_encoding(context[:, indx_update_hs], reversed_context[:, indx_update_hs], self.max_len, semantic_info)
+                encoder_states = self.compute_encoding(context[:, indx_update_hs], reversed_context[:, indx_update_hs], self.max_len)
                 prev_hs[indx_update_hs] = encoder_states[1][-1]
                 ran_vectors[indx_update_hs,:] = self.model.rng.normal(size=(len(indx_update_hs),self.model.latent_gaussian_per_utterance_dim)).astype('float32')
 

@@ -193,11 +193,10 @@ def create_padded_batch(state, rng, x, force_end_of_utterance_token = False):
 class Iterator(SSIterator):
     def __init__(self, dialogue_file, batch_size, **kwargs):
         SSIterator.__init__(self, dialogue_file, batch_size,                          \
-                            semantic_file=kwargs.pop('semantic_file', None),          \
                             max_len=kwargs.pop('max_len', -1),                        \
                             use_infinite_loop=kwargs.pop('use_infinite_loop', False))
 
-        # TODO: max_len should be handled here and SSIterator should zip semantic_data and 
+        # TODO: max_len should be handled here
         # data. 
         self.k_batches = kwargs.pop('sort_k_batches', 20)
         # TODO: For backward compatibility. This should be removed in future versions
@@ -232,13 +231,10 @@ class Iterator(SSIterator):
 
             # Split list of words from the dialogue index
             data_x = []
-            data_semantic = []
             for i in range(len(data)):
                 data_x.append(data[i][0])
-                data_semantic.append(data[i][1])
 
             x = numpy.asarray(list(itertools.chain(data_x)))
-            x_semantic = numpy.asarray(list(itertools.chain(data_semantic)))
 
             lens = numpy.asarray([map(len, x)])
             order = numpy.argsort(lens.max(axis=0))
@@ -246,14 +242,6 @@ class Iterator(SSIterator):
             for k in range(number_of_batches):
                 indices = order[k * batch_size:(k + 1) * batch_size]
                 full_batch = create_padded_batch(self.state, self.rng, [x[indices]])
-
-                # Add semantic information to batch; take care to fill with -1 (=n/a) whenever the batch is filled with empty dialogues
-#                if 'semantic_information_dim' in self.state:
-                if self.semantic_file:
-                    full_batch['x_semantic'] = - numpy.ones((self.state['bs'], self.state['semantic_information_dim'])).astype('int32')
-                    full_batch['x_semantic'][0:len(indices), :] = numpy.asarray(list(itertools.chain(x_semantic[indices]))).astype('int32')
-                else:
-                    full_batch['x_semantic'] = None
 
                 # Then split batches to have size 'max_grad_steps'
                 splits = int(math.ceil(float(full_batch['max_length']) / float(self.state['max_grad_steps'])))
@@ -321,20 +309,11 @@ class Iterator(SSIterator):
         return batch
 
 def get_train_iterator(state):
-    semantic_train_path = None
-    semantic_valid_path = None
-    
-    if 'train_semantic' in state:
-        assert state['valid_semantic']
-        semantic_train_path = state['train_semantic']
-        semantic_valid_path = state['valid_semantic']
-    
     train_data = Iterator(
         state['train_dialogues'],
         int(state['bs']),
         state=state,
         seed=state['seed'],
-        semantic_file=semantic_train_path,
         use_infinite_loop=True,
         max_len=-1,
         evaluate_mode=False)
@@ -344,7 +323,6 @@ def get_train_iterator(state):
         int(state['bs']),
         state=state,
         seed=state['seed'],
-        semantic_file=semantic_valid_path,
         use_infinite_loop=False,
         max_len=-1,
         evaluate_mode=True)
@@ -356,7 +334,6 @@ def get_secondary_train_iterator(state):
         int(state['bs']),
         state=state,
         seed=state['seed'],
-        semantic_file=None,
         use_infinite_loop=True,
         max_len=-1) 
 
@@ -365,14 +342,12 @@ def get_secondary_train_iterator(state):
 def get_test_iterator(state):
     assert 'test_dialogues' in state
     test_path = state.get('test_dialogues')
-    semantic_test_path = state.get('test_semantic', None)
 
     test_data = Iterator(
         test_path,
         int(state['bs']), 
         state=state,
         seed=state['seed'],
-        semantic_file=semantic_test_path,
         use_infinite_loop=False,
         max_len=-1,
         evaluate_mode=True)

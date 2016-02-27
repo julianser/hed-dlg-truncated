@@ -44,11 +44,7 @@ class SSFetcher(threading.Thread):
 
                 # Append only if it is shorter than max_len
                 if diter.max_len == -1 or len(s) <= diter.max_len:
-                    if diter.semantic_file is not None:
-                        dialogues.append([s, diter.semantic_data[index]])
-                    else:
-                        # Append 'None' to the dialogue if there is no semantic information
-                        dialogues.append([s, None])
+                    dialogues.append([s])
 
             if len(dialogues):
                 diter.queue.put(dialogues)
@@ -61,7 +57,6 @@ class SSIterator(object):
     def __init__(self,
                  dialogue_file,
                  batch_size,
-                 semantic_file=None,
                  seed=1234,
                  max_len=-1,
                  use_infinite_loop=True,
@@ -80,13 +75,6 @@ class SSIterator(object):
         self.data = cPickle.load(open(self.dialogue_file, 'r'))
         self.data_len = len(self.data)
         logger.debug('Data len is %d' % self.data_len)
-
-        if self.semantic_file:
-            self.semantic_data = cPickle.load(open(self.semantic_file, 'r'))
-            self.semantic_data_len = len(self.semantic_data)
-            logger.debug('Semantic data len is %d' % self.semantic_data_len)
-            # We need to have as many semantic labels as we have dialogues
-            assert self.semantic_data_len == self.data_len 
 
     def start(self):
         self.exit_flag = False

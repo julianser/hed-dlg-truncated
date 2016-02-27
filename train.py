@@ -224,7 +224,7 @@ def main(args):
             (time.time() - start_time)/60. < state['time_stop'] and
             patience >= 0):
 
-        # Sample stuff
+        ### Sampling phase
         if step % 200 == 0:
             # First generate stochastic samples
             for param in model.params:
@@ -234,8 +234,7 @@ def main(args):
             print "Sampled : {}".format(samples[0])
 
 
-        # Training phase
-
+        ### Training phase
         # If we are training on a primary and secondary dataset, sample at random from either of them
         if is_end_of_batch:
             if use_secondary_data and (secondary_rng.uniform() > state['secondary_proportion']):
@@ -261,21 +260,22 @@ def main(args):
         max_length = batch['max_length']
         x_cost_mask = batch['x_mask']
         x_cost_weight = batch['x_weight']
-        x_semantic = batch['x_semantic']
         x_reset = batch['x_reset']
         ran_cost_utterance = batch['ran_var_constutterance']
         ran_decoder_drop_mask = batch['ran_decoder_drop_mask']
 
         is_end_of_batch = False
+        # We print whenever we reach the end of an example (e.g. the end of a dialogue or a document)
+        # Knowing when the training procedure reaches the end is useful for diagnosing problems w.r.t. training costs
         if numpy.sum(numpy.abs(x_reset)) < 1:
             print 'END-OF-BATCH EXAMPLE!'
             is_end_of_batch = True
 
         if state['use_nce']:
             y_neg = rng.choice(size=(10, max_length, x_data.shape[1]), a=model.idim, p=model.noise_probs).astype('int32')
-            c, variational_cost, posterior_mean_variance = train_batch(x_data, x_data_reversed, y_neg, max_length, x_cost_mask, x_cost_weight, x_semantic, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
+            c, variational_cost, posterior_mean_variance = train_batch(x_data, x_data_reversed, y_neg, max_length, x_cost_mask, x_cost_weight, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
         else:
-            c, variational_cost, posterior_mean_variance = train_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_cost_weight, x_semantic, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
+            c, variational_cost, posterior_mean_variance = train_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_cost_weight, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
 
         print 'cost_sum', c
         print 'cost_mean', c / float(numpy.sum(x_cost_mask))
@@ -290,7 +290,6 @@ def main(args):
         #    print 'x_data_reversed', x_data_reversed
         #    print 'max_length', max_length
         #    print 'x_cost_mask', x_cost_mask
-        #    print 'x_semantic', x_semantic
         #    print 'x_reset', x_reset
         #    print 'ran_cost_utterance', ran_cost_utterance[0:3, 0:3, 0:3]
 
@@ -337,13 +336,8 @@ def main(args):
                              float(train_variational_cost/train_done), \
                              float(train_posterior_mean_variance/train_dialogues_done))
 
-
-        if valid_data is not None and\
-            step % state['valid_freq'] == 0 and step > 1:
-                start_validation = True
-
+        ### Inspection phase
         # Evaluate gradient variance every 200 steps
-
         if (step % 200 == 0) and (model.add_latent_gaussian_per_utterance):
             k_eval = 10
 
@@ -354,7 +348,7 @@ def main(args):
                 batch = add_random_variables_to_batch(model.state, model.rng, batch, None, False)
                 ran_cost_utterance = batch['ran_var_constutterance']
                 ran_decoder_drop_mask = batch['ran_decoder_drop_mask']
-                softmax_cost, var_cost, grads_wrt_softmax, grads_wrt_variational_cost = eval_grads(x_data, x_data_reversed, max_length, x_cost_mask, x_cost_weight, x_semantic, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
+                softmax_cost, var_cost, grads_wrt_softmax, grads_wrt_variational_cost = eval_grads(x_data, x_data_reversed, max_length, x_cost_mask, x_cost_weight, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
                 softmax_costs[k] = softmax_cost
                 var_costs[k] = var_cost
                 gradients_wrt_softmax[k, :, :] = grads_wrt_softmax
@@ -396,6 +390,10 @@ def main(args):
         #print 'grads_wrt_variational_cost', grads_wrt_variational_cost.shape, numpy.sum(numpy.abs(grads_wrt_variational_cost)), numpy.abs(grads_wrt_variational_cost[0:5,0:5])
 
 
+        ### Evaluation phase
+        if valid_data is not None and\
+            step % state['valid_freq'] == 0 and step > 1:
+                start_validation = True
 
         # Only start validation loop once it's time to validate and once all previous batches have been reset
         if start_validation and is_end_of_batch:
@@ -429,7 +427,7 @@ def main(args):
                 while True:
                     batch = valid_data.next()
 
-                    # Train finished
+                    # Validation finished
                     if not batch:
                         break
                      
@@ -440,15 +438,12 @@ def main(args):
                     max_length = batch['max_length']
                     x_cost_mask = batch['x_mask']
                     x_cost_weight = batch['x_weight']
-                    x_semantic = batch['x_semantic']
 
                     x_reset = batch['x_reset']
                     ran_cost_utterance = batch['ran_var_constutterance']
                     ran_decoder_drop_mask = batch['ran_decoder_drop_mask']
 
-                    c, kl_term, c_list, kl_term_list, posterior_mean_variance = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_cost_weight, x_semantic, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
-                    print 'c_list', c_list
-                    print 'kl_term_list', kl_term_list
+                    c, kl_term, c_list, kl_term_list, posterior_mean_variance = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_cost_weight, x_reset, ran_cost_utterance, ran_decoder_drop_mask)
 
                     # Rehape into matrix, where rows are validation samples and columns are tokens
                     # Note that we use max_length-1 because we don't get a cost for the first token

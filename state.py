@@ -230,12 +230,6 @@ def prototype_test():
     state['dictionary'] = "./tests/data/ttrain.dict.pkl"
     state['save_dir'] = "./tests/models/"
 
-    # Paths for semantic information 
-    state['train_semantic'] = "./tests/data/ttrain.semantic.pkl"
-    state['test_semantic'] = "./tests/data/ttest.semantic.pkl"
-    state['valid_semantic'] = "./tests/data/tvalid.semantic.pkl"
-    state['semantic_information_dim'] = 2
-
     # If secondary_train_dialogues is specified the model will simultaneously be trained on a second dataset.
     # Each batch (document) will be chosen from the secondary dataset with probability secondary_proportion.
     #state['secondary_train_dialogues'] = "./tests/data/ttrain.dialogues.pkl"
@@ -294,12 +288,6 @@ def prototype_test_variational():
     state['valid_dialogues'] = "./tests/data/tvalid.dialogues.pkl"
     state['dictionary'] = "./tests/data/ttrain.dict.pkl"
     state['save_dir'] = "./tests/models/"
-
-    # Paths for semantic information 
-    state['train_semantic'] = "./tests/data/ttrain.semantic.pkl"
-    state['test_semantic'] = "./tests/data/ttest.semantic.pkl"
-    state['valid_semantic'] = "./tests/data/tvalid.semantic.pkl"
-    state['semantic_information_dim'] = 2
 
     state['max_grad_steps'] = 20
     
@@ -374,13 +362,6 @@ def prototype_movies():
     # Each batch (document) will be chosen from the secondary dataset with probability secondary_proportion.
     #state['secondary_train_dialogues'] = "Data/OpenSubtitles.dialogues.pkl"
     #state['secondary_proportion'] = 0.5
-
-    # Paths for semantic information.
-    # The genre labels are incorrect right now...
-    #state['train_semantic'] = "Data/Training.genres.pkl"
-    #state['test_semantic'] = "Data/Test.genres.pkl"
-    #state['valid_semantic'] = "Data/Validation.genres.pkl"
-    #state['semantic_information_dim'] = 16
 
     # Gradients will be truncated after 80 steps. This seems like a fair start.
     state['max_grad_steps'] = 80

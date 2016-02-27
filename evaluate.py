@@ -130,7 +130,6 @@ def main():
         x_data_reversed = batch['x_reversed']
         max_length = batch['max_length']
         x_cost_mask = batch['x_mask']
-        x_semantic = batch['x_semantic']
         reset_mask = batch['x_reset']
         ran_cost_utterance = batch['ran_var_constutterance']
         ran_decoder_drop_mask = batch['ran_decoder_drop_mask']
@@ -141,7 +140,7 @@ def main():
 
         batch['num_preds'] = numpy.sum(x_cost_mask)
 
-        c, c_list, _, _  = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask, x_semantic, reset_mask, ran_cost_utterance, ran_decoder_drop_mask)
+        c, c_list, _, _  = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask, reset_mask, ran_cost_utterance, ran_decoder_drop_mask)
 
         c_list = c_list.reshape((batch['x'].shape[1],max_length-1), order=(1,0))
         c_list = numpy.sum(c_list, axis=1)     
