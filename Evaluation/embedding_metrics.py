@@ -14,6 +14,9 @@ Example run:
 
 The script assumes one example per line (e.g. one dialogue or one sentence per line), where line n in 'path_to_ground_truth.txt' matches that of line n in 'path_to_predictions.txt'.
 
+NOTE: The metrics are not symmetric w.r.t. the input sequences. 
+      Therefore, DO NOT swap the ground truths with the predicted responses.
+
 References:
 
 A Comparison of Greedy and Optimal Assessment of Natural Language Student Input Word Similarity Metrics Using Word to Word Similarity Metrics. Vasile Rus, Mihai Lintean. 2012. Proceedings of the Seventh Workshop on Building Educational Applications Using NLP, NAACL 2012.
@@ -66,7 +69,9 @@ def greedy_score(fileone, filetwo, w2v):
                 o += np.max(tmp)
                 x_count += 1
 
-        if x_count < 1 or y_count < 1: # if no word embeddings are found we skip this example
+        # if none of the words in response or ground truth have embeddings, count result as zero
+        if x_count < 1 or y_count < 1:
+            scores.append(0)
             continue
 
         o /= float(x_count)
@@ -96,8 +101,13 @@ def extrema_score(fileone, filetwo, w2v):
             if tok in w2v:
                 Y.append(w2v[tok])
 
-        # if none of the words have embeddings, skip
-        if (np.linalg.norm(X) < 0.00000000001 or np.linalg.norm(Y) < 0.00000000001):
+        # if none of the words have embeddings in ground truth, skip
+        if np.linalg.norm(X) < 0.00000000001:
+            continue
+
+        # if none of the words have embeddings in response, count result as zero
+        if np.linalg.norm(Y) < 0.00000000001:
+            scores.append(0)
             continue
 
         xmax = np.max(X, 0)  # get positive max
@@ -148,9 +158,16 @@ def average(fileone, filetwo, w2v):
         for tok in tokens2:
             if tok in w2v:
                 Y += w2v[tok]
-        # if none of the words have embeddings, skip
-        if (np.linalg.norm(X) < 0.00000000001 or np.linalg.norm(Y) < 0.00000000001):
+
+        # if none of the words in ground truth have embeddings, skip
+        if np.linalg.norm(X) < 0.00000000001:
             continue
+
+        # if none of the words have embeddings in response, count result as zero
+        if np.linalg.norm(Y) < 0.00000000001:
+            scores.append(0)
+            continue
+
         X = np.array(X)/np.linalg.norm(X)
         Y = np.array(Y)/np.linalg.norm(Y)
         o = np.dot(X, Y.T)/np.linalg.norm(X)/np.linalg.norm(Y)
