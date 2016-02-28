@@ -53,7 +53,7 @@ def add_random_variables_to_batch(state, rng, batch, prev_batch, evaluate_mode):
             if not eos_indices[-1] == batch['x'].shape[0]:
                 eos_indices = eos_indices + [batch['x'].shape[0]]
         else:
-            eos_indices = [0] + [batch['x'].shape[0]-1]
+            eos_indices = [0] + [batch['x'].shape[0]]
 
         # Sample random variables using NumPy
         ran_vectors = rng.normal(loc=0, scale=1, size=(len(eos_indices), state['latent_gaussian_per_utterance_dim']))

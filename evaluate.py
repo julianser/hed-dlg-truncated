@@ -140,7 +140,7 @@ def main():
 
         batch['num_preds'] = numpy.sum(x_cost_mask)
 
-        c, c_list, _, _  = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask, reset_mask, ran_cost_utterance, ran_decoder_drop_mask)
+        c, _, c_list, _, _  = eval_batch(x_data, x_data_reversed, max_length, x_cost_mask, reset_mask, ran_cost_utterance, ran_decoder_drop_mask)
 
         c_list = c_list.reshape((batch['x'].shape[1],max_length-1), order=(1,0))
         c_list = numpy.sum(c_list, axis=1)     
