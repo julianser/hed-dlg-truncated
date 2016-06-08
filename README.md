@@ -47,7 +47,7 @@ If you have Theano with GPU installed (bleeding edge version), you can train the
 4) Create a new prototype inside state.py (look at prototype_ubuntu_HRED for an example)
 5) From the terminal, cd into the code directory and run:
 
-    THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python train.py --prototype &lt;prototype_name&gt; &&gt; Model_Output.txt
+    THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python train.py --prototype <prototype_name> > Model_Output.txt
 
 where &lt;prototype_name&gt; is a state (model architecture) defined inside state.py.
 Training a model to convergence on a modern GPU on the Ubuntu Dialogue Corpus with 46 million tokens takes about 1-2 weeks. If your GPU runs out of memory, you can adjust the bs (batch size) parameter in the model state, but training will be slower. You can also play around with the other parameters inside state.py.
@@ -60,11 +60,11 @@ where &lt;model_name&gt; is the name automatically generated during training.
 
 
 
-### Model Sampling & Test
+### Model Sampling & Testing
 
 To generate model responses using beam search run:
 
-    THEANO_FLAGS=mode=FAST_RUN,floatX=float32,device=gpu python sample.py <model_name> <contexts> &lt;model_outputs&gt; --beam_search --n-samples=<beams> --ignore-unk --verbose
+    THEANO_FLAGS=mode=FAST_RUN,floatX=float32,device=gpu python sample.py <model_name> <contexts> <model_outputs> --beam_search --n-samples=<beams> --ignore-unk --verbose
 
 where &lt;model_name&gt; is the name automatically generated during training, &lt;contexts&gt; is a file containing the dialogue contexts with one dialogue per line, and &lt;beams&gt; is the size of the beam search. The results are saved in the file &lt;model_outputs&gt;.
 
