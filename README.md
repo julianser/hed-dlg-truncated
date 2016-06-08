@@ -56,7 +56,7 @@ To test a model w.r.t. word perplexity run:
 
     THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python evaluate.py <model_name> Model_Evaluation.txt
 
-where &lt;model_name&gt; is the name automatically generated during training.
+where &lt;model_name&gt; is the model name automatically generated during training.
 
 
 
@@ -72,7 +72,7 @@ To compute the embedding-based metrics on the generated responses run:
 
     python Evaluation/embedding_metrics.py <ground_truth_responses> <model_outputs> <word_emb> 
 
-where &lt;ground_truth_responses&gt; is a file containing the ground truth responses, and &lt;word_emb&gt; is the path to the binarized word embeddings. For the word embeddings, we recommend to use Word2Vec trained on the GoogleNews Corpus: https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM.
+where &lt;ground_truth_responses&gt; is a file containing the ground truth responses, &lt;model_outputs&gt; is the file generated above and &lt;word_emb&gt; is the path to the binarized word embeddings. For the word embeddings, we recommend to use Word2Vec trained on the GoogleNews Corpus: https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM.
 
 
 
@@ -91,7 +91,7 @@ The pre-processed Ubuntu Dialogue Corpus and model responses used by Serban et a
 
 The original Ubuntu Dialogue Corpus as released by Lowe et al. (2015) can be found here: http://cs.mcgill.ca/~jpineau/datasets/ubuntu-corpus-1.0/
 
-The MovieTriples script is available by contacting Iulian Vlad Serban by email, although we strongly recommend researchers to benchmark their models on the Ubuntu Dialogue Corpus and Twitter corpora, as these datasets are substantially larger and represent more well-defined tasks.
+The MovieTriples script is available by contacting Iulian Vlad Serban by email, although we strongly recommend researchers to benchmark their models on the Ubuntu Dialogue Corpus and Twitter corpora, as these datasets are substantially larger and represent more well-defined tasks. Although, unfortunately due to Twitter's terms of service we are not allowed to distribute any Twitter corpora.
 
 ### References
 
