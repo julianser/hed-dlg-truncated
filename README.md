@@ -54,7 +54,7 @@ Training a model to convergence on a modern GPU on the Ubuntu Dialogue Corpus wi
 
 To test a model w.r.t. word perplexity run:
 
-    THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python evaluate.py --exclude-sos --plot-graphs Output/<model_name> Model_Evaluation.txt
+    THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python evaluate.py <model_name> Model_Evaluation.txt
 
 where &lt;model_name&gt; is the name automatically generated during training.
 
