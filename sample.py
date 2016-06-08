@@ -34,7 +34,7 @@ def parse_args():
 
     parser.add_argument("--ignore-unk",
             action="store_false",
-            help="Ignore unknown words")
+            help="Allows generation procedure to output unknown words (<unk> tokens)")
 
     parser.add_argument("model_prefix",
             help="Path to the model prefix (without _model.npz or _state.pkl)")
@@ -111,7 +111,5 @@ def main():
     print('All done!')
 
 if __name__ == "__main__":
-    # THEANO_FLAGS=mode=FAST_RUN,floatX=float32,device=gpu python sample.py ../ModelsForAlex/LSTM/1441312691.38_MovieScriptModel Test_SplitByDialogues_TestContexts.txt GeneratedResponses.txt --beam_search --n-samples=100 --ignore-unk --verbose &> TTT.txt
-    # awk -F "\t" '{print $1}' GeneratedResponses.txt &> First_GeneratedResponses.txt
     main()
 

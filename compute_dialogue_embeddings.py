@@ -58,45 +58,48 @@ def parse_args():
     return parser.parse_args()
 
 def compute_encodings(joined_contexts, model, model_compute_encoding, output_second_last_state = False):
-    # HACK
     # TODO Fix seqlen below
-    seqlen = 160
+    seqlen = 600
     context = numpy.zeros((seqlen, len(joined_contexts)), dtype='int32')
     context_lengths = numpy.zeros(len(joined_contexts), dtype='int32')
+    second_last_utterance_position = numpy.zeros(len(joined_contexts), dtype='int32')
+
+
     for idx in range(len(joined_contexts)):
         context_lengths[idx] = len(joined_contexts[idx])
         if context_lengths[idx] < seqlen:
             context[:context_lengths[idx], idx] = joined_contexts[idx]
         else:
-            # If context is longer tha max context, truncate it and force the end-of-utterance token at the end
+            # If context is longer tham max context, truncate it and force the end-of-utterance token at the end
             context[:seqlen, idx] = joined_contexts[idx][0:seqlen]
             context[seqlen-1, idx] = model.eos_sym
             context_lengths[idx] = seqlen
 
+        eos_indices = list(numpy.where(context[:context_lengths[idx], idx] == model.eos_sym)[0])
+
+        if len(eos_indices) > 1:
+            second_last_utterance_position[idx] = eos_indices[-2]
+        else:
+            second_last_utterance_position[idx] = context_lengths[idx]
+
     n_samples = len(joined_contexts)
 
     # Generate the reversed context
-    reversed_context = numpy.copy(context)
-    for idx in range(context.shape[1]):
-        eos_indices = numpy.where(context[:, idx] == model.eos_sym)[0]
-        prev_eos_index = -1
-        for eos_index in eos_indices:
-            reversed_context[(prev_eos_index+2):eos_index, idx] = (reversed_context[(prev_eos_index+2):eos_index, idx])[::-1]
-            prev_eos_index = eos_index
+    reversed_context = model.reverse_utterances(context)
 
-    # Recompute hs only for those particular sentences
-    # that met the end-of-sentence token
-
-    encoder_states = model_compute_encoding(context, reversed_context, seqlen)
-    hs = encoder_states[1]
+    encoder_states = model_compute_encoding(context, reversed_context, seqlen+1)
+    hidden_states = encoder_states[-2] # hidden state for the "context" encoder, h_s,
+                                       # and last hidden state of the utterance "encoder", h
+    #hidden_states = encoder_states[-1] # mean for the stochastic latent variable, z
 
     if output_second_last_state:
-        second_last_hidden_state = numpy.zeros((hs.shape[1], hs.shape[2]), dtype='float64')
-        for i in range(hs.shape[1]):
-            second_last_hidden_state[i, :] = hs[context_lengths[i] - 1, i, :]
+        second_last_hidden_state = numpy.zeros((hidden_states.shape[1], hidden_states.shape[2]), dtype='float64')
+        for i in range(hidden_states.shape[1]):
+            second_last_hidden_state[i, :] = hidden_states[second_last_utterance_position[i], i, :]
+
         return second_last_hidden_state
     else:
-        return hs[-1, :, :]
+        return hidden_states[-1, :, :]
 
 
 def main():
@@ -111,6 +114,8 @@ def main():
 
     logging.basicConfig(level=getattr(logging, state['level']), format="%(asctime)s: %(name)s: %(levelname)s: %(message)s")
 
+    state['bs'] = 10
+
     model = DialogEncoderDecoder(state) 
     
     if os.path.isfile(model_path):
@@ -118,12 +123,12 @@ def main():
         model.load(model_path)
     else:
         raise Exception("Must specify a valid model path")
-    
+
     contexts = [[]]
     lines = open(args.dialogues, "r").readlines()
     if len(lines):
-        contexts = [x.strip().split('\t') for x in lines]
-   
+        contexts = [x.strip() for x in lines]
+
     model_compute_encoding = model.build_encoder_function()
     dialogue_encodings = []
 
@@ -132,22 +137,21 @@ def main():
     batch_index = 0
     batch_total = int(math.ceil(float(len(contexts)) / float(model.bs)))
     for context_id, context_sentences in enumerate(contexts):
-
-        # Convert contextes into list of ids
+        # Convert contexts into list of ids
         joined_context = []
 
         if len(context_sentences) == 0:
             joined_context = [model.eos_sym]
         else:
-            joined_context += [model.eos_sym]
-            for sentence in context_sentences:
-                sentence_ids = model.words_to_indices(sentence.split())
-                # Add eos tokens
-                joined_context += sentence_ids + [model.eos_sym]
+            joined_context = model.words_to_indices(context_sentences.split())
 
-        # HACK
-        #for i in range(0, 50):
-        #    joined_context += [0] + [model.eos_sym]
+            if joined_context[0] != model.eos_sym:
+                joined_context = [model.eos_sym] + joined_context
+
+            if joined_context[-1] != model.eos_sym:
+                joined_context += [model.eos_sym]
+
+        #print 'joined_context', joined_context
 
         joined_contexts.append(joined_context)
 
@@ -173,3 +177,4 @@ def main():
 if __name__ == "__main__":
     main()
 
+    #  THEANO_FLAGS=mode=FAST_COMPILE,floatX=float32 python compute_dialogue_embeddings.py tests/models/1462302387.69_testmodel tests/data/tvalid_contexts.txt Latent_Variable_Means --verbose --use-second-last-state

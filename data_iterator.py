@@ -22,19 +22,19 @@ logger = logging.getLogger(__name__)
 
 def add_random_variables_to_batch(state, rng, batch, prev_batch, evaluate_mode):
     """
-    This is a helper function, which adds the random variables in a batch.
+    This is a helper function, which adds random variables to a batch.
     We do it this way, because we want to avoid Theano's random sampling both to speed up and to avoid
     known Theano issues with sampling inside scan loops.
 
-    The random variable 'ran_var_constutterance' is sampled from a standard Normal distribution, 
+    The random variable 'ran_var_constutterance' is sampled from a standard Gaussian distribution, 
     which remains constant during each utterance (i.e. between end-of-utterance tokens).
     
-    When not in evaluate mode, the random variable 'ran_decoder_drop_mask' is sampled. 
+    When not in evaluate mode, the random vector 'ran_decoder_drop_mask' is also sampled. 
     This variable represents the input tokens which are replaced by unk when given to 
-    the decoder RNN.
+    the decoder RNN. It is required for the noise addition trick used by Bowman et al. (2015).
     """
 
-    # If none return none...
+    # If none return none
     if not batch:
         return batch
 
@@ -105,16 +105,12 @@ def create_padded_batch(state, rng, x, force_end_of_utterance_token = False):
     
     X = numpy.zeros((mx, n), dtype='int32')
     Xmask = numpy.zeros((mx, n), dtype='float32') 
-    Xweight = numpy.ones((mx, n), dtype='float32') 
 
     # Variable to store each utterance in reverse form (for bidirectional RNNs)
     X_reversed = numpy.zeros((mx, n), dtype='int32')
 
-    # Variable to store random vector sampled at the beginning of each utterance
-    #Ran_Var_ConstUtterance = numpy.zeros((mx, n, state['latent_gaussian_per_utterance_dim']), dtype='float32')
-
-    # Fill X, Xmask and Xweight (if weighting tokens is enabled)
-    # Keep track of number of predictions and maximum dialogue length
+    # Fill X and Xmask.
+    # Keep track of number of predictions and maximum dialogue length.
     num_preds = 0
     max_length = 0
     for idx in xrange(len(x[0])):
@@ -151,6 +147,8 @@ def create_padded_batch(state, rng, x, force_end_of_utterance_token = False):
         Xmask[0:dialogue_length, idx] = 1.
 
         # Reverse all utterances
+        # TODO: For backward compatibility. This should be removed in future versions
+        # i.e. move all the x_reversed computations to the model itself.
         eos_indices = numpy.where(X[:, idx] == state['eos_sym'])[0]
         X_reversed[:, idx] = X[:, idx]
         prev_eos_index = -1
@@ -160,49 +158,29 @@ def create_padded_batch(state, rng, x, force_end_of_utterance_token = False):
             if prev_eos_index > dialogue_length:
                 break
 
-        if state['weight_token_loglikelihoods']:
-            rescale = 1.0
-            if state['weight_token_loglikelihoods_beta'] > 1.0:
-                rescale = 1.0 / state['weight_token_loglikelihoods_beta']
-
-            for j in range(dialogue_length):
-                Xweight[j,idx] = (state['weight_token_loglikelihoods_dictionary'].get(X[j,idx], 1.0) + state['weight_token_loglikelihoods_beta'])*rescale
-
-
-        # Sample random variables (we want to avoid Theano's random sampling to speed up the process...)
-        #ran_vectors = rng.normal(loc=0, scale=1, size=(len(eos_indices), state['latent_gaussian_per_utterance_dim']))
-        #for i in range(len(eos_indices)-1):
-        #    for j in range(eos_indices[i], eos_indices[i+1]):
-        #        Ran_Var_ConstUtterance[j, idx, :] = ran_vectors[i, :]
-
-        #print 'X[:dialogue_length, idx]', X[:dialogue_length, idx]
-        #print 'Ran_Var_ConstUtterance[j, :, idx]', Ran_Var_ConstUtterance[:, :, idx]
 
     assert num_preds == numpy.sum(Xmask) - numpy.sum(Xmask[0, :])
 
-    return {'x': X,                                                 \
-            'x_reversed': X_reversed,                               \
-            'x_mask': Xmask,                                        \
-            'x_weight': Xweight,                                    \
-            'num_preds': num_preds,                                 \
-            'num_dialogues': len(x[0]),                             \
-            'max_length': max_length                                \
-           }
-            #'ran_var_constutterance': Ran_Var_ConstUtterance,       \
+    batch = {'x': X,                                                 \
+             'x_reversed': X_reversed,                               \
+             'x_mask': Xmask,                                        \
+             'num_preds': num_preds,                                 \
+             'num_dialogues': len(x[0]),                             \
+             'max_length': max_length                                \
+            }
+
+    return batch
 
 class Iterator(SSIterator):
     def __init__(self, dialogue_file, batch_size, **kwargs):
         SSIterator.__init__(self, dialogue_file, batch_size,                          \
+                            seed=kwargs.pop('seed', 1234),                            \
                             max_len=kwargs.pop('max_len', -1),                        \
                             use_infinite_loop=kwargs.pop('use_infinite_loop', False))
 
-        # TODO: max_len should be handled here
-        # data. 
         self.k_batches = kwargs.pop('sort_k_batches', 20)
-        # TODO: For backward compatibility. This should be removed in future versions
-        # i.e. remove all the x_reversed computations in the model itself.
         self.state = kwargs.pop('state', None)
-        # ---------------- 
+
         self.batch_iter = None
         self.rng = numpy.random.RandomState(self.state['seed'])
 
@@ -211,7 +189,7 @@ class Iterator(SSIterator):
 
         # Store whether the iterator operates in evaluate mode or not
         self.evaluate_mode = kwargs.pop('evaluate_mode', False)
-        print 'evaluate_mode', self.evaluate_mode
+        print 'Data Iterator Evaluate Mode: ', self.evaluate_mode
 
     def get_homogenous_batch_iter(self, batch_size = -1):
         while True:
@@ -261,7 +239,6 @@ class Iterator(SSIterator):
                     batch['x'] = full_batch['x'][start_pos:end_pos, :]
                     batch['x_reversed'] = full_batch['x_reversed'][start_pos:end_pos, :]
                     batch['x_mask'] = full_batch['x_mask'][start_pos:end_pos, :]
-                    batch['x_weight'] = full_batch['x_weight'][start_pos:end_pos, :]
                     batch['max_length'] = end_pos - start_pos
                     batch['num_preds'] = numpy.sum(batch['x_mask']) - numpy.sum(batch['x_mask'][0,:])
 
@@ -297,7 +274,7 @@ class Iterator(SSIterator):
             # Retrieve next batch
             batch = next(self.batch_iter)
 
-            # Add Normal random variables to batch. 
+            # Add Gaussian random variables to batch. 
             # We add them separetly for each batch to save memory.
             # If we instead had added them to the full batch before splitting into mini-batches,
             # the random variables would take up several GBs for big batches and long documents.
@@ -327,17 +304,6 @@ def get_train_iterator(state):
         max_len=-1,
         evaluate_mode=True)
     return train_data, valid_data 
-
-def get_secondary_train_iterator(state):
-    secondary_train_data = Iterator(
-        state['secondary_train_dialogues'],
-        int(state['bs']),
-        state=state,
-        seed=state['seed'],
-        use_infinite_loop=True,
-        max_len=-1) 
-
-    return secondary_train_data
 
 def get_test_iterator(state):
     assert 'test_dialogues' in state

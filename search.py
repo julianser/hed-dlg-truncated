@@ -29,28 +29,28 @@ def sample_wrapper(sample_logic):
         context_samples = []
         context_costs = []
 
-        # Start loop for each sentence
-        for context_id, context_sentences in enumerate(contexts):
+        # Start loop for each utterance
+        for context_id, context_utterances in enumerate(contexts):
             if verbose:
-                logger.info("Searching for {}".format(context_sentences))
+                logger.info("Searching for {}".format(context_utterances))
 
             # Convert contextes into list of ids
             joined_context = []
-            if len(context_sentences) == 0:
+            if len(context_utterances) == 0:
                 joined_context = [sampler.model.eos_sym]
             else:
-                sentence_ids = sampler.model.words_to_indices(context_sentences.split())
+                utterance_ids = sampler.model.words_to_indices(context_utterances.split())
                 # Add eos tokens
-                if len(sentence_ids) > 0:
-                    if not sentence_ids[0] == sampler.model.eos_sym:
-                        sentence_ids = [sampler.model.eos_sym] + sentence_ids
-                    if not sentence_ids[-1] == sampler.model.eos_sym:
-                        sentence_ids += [sampler.model.eos_sym]
+                if len(utterance_ids) > 0:
+                    if not utterance_ids[0] == sampler.model.eos_sym:
+                        utterance_ids = [sampler.model.eos_sym] + utterance_ids
+                    if not utterance_ids[-1] == sampler.model.eos_sym:
+                        utterance_ids += [sampler.model.eos_sym]
                 
                 else:
-                    sentence_ids = [sampler.model.eos_sym]
+                    utterance_ids = [sampler.model.eos_sym]
 
-                joined_context += sentence_ids
+                joined_context += utterance_ids
 
             samples, costs = sample_logic(sampler, joined_context, **kwargs) 
              
@@ -92,8 +92,8 @@ class Sampler(object):
     def select_next_words(self, next_probs, step_num, how_many):
         pass
 
-    def count_n_turns(self, sentence):
-        return len([w for w in sentence \
+    def count_n_turns(self, utterance):
+        return len([w for w in utterance \
                     if w == self.model.eos_sym])
 
     @sample_wrapper
@@ -119,7 +119,7 @@ class Sampler(object):
 
         if context[-1, 0] != self.model.eos_sym:
             raise Exception('Last token of context, when present,'
-                            'should be the end of sentence: %d' % self.model.eos_sym)
+                            'should be the end of utterance: %d' % self.model.eos_sym)
 
         # Generate the reversed context
         reversed_context = self.model.reverse_utterances(context)
@@ -186,7 +186,7 @@ class Sampler(object):
             prev_words = context[-1, :]
            
             # Recompute encoder states, hs and random variables 
-            # only for those particular sentences that meet the end-of-sentence token
+            # only for those particular utterances that meet the end-of-utterance token
             indx_update_hs = [num for num, prev_word in enumerate(prev_words)
                                 if prev_word == self.model.eos_sym]
             if len(indx_update_hs):
@@ -224,11 +224,11 @@ class Sampler(object):
 
                 hypothesis = gen[beam_ind] + [word_ind]
                  
-                # End of sentence has been detected
+                # End of utterance has been detected
                 n_turns_hypothesis = self.count_n_turns(hypothesis)
                 if n_turns_hypothesis == n_turns:
                     if verbose:
-                        logger.debug("adding sentence {} from beam {}".format(hypothesis, beam_ind))
+                        logger.debug("adding utterance {} from beam {}".format(hypothesis, beam_ind))
 
                     # We finished sampling
                     fin_gen.append(hypothesis)
@@ -242,7 +242,7 @@ class Sampler(object):
                     hypothesis = new_hypothesis
 
                     if verbose:
-                        logger.debug("adding sentence {} from beam {}".format(hypothesis, beam_ind))
+                        logger.debug("adding utterance {} from beam {}".format(hypothesis, beam_ind))
 
                     # We finished sampling
                     fin_gen.append(hypothesis)
@@ -316,8 +316,8 @@ class BeamSampler(Sampler):
         if step_num == 0:
             flat_next_costs = next_costs[:1, :].flatten()
         else:
-            # Set the next cost to infinite for finished sentences (they will be replaced)
-            # by other sentences in the beam
+            # Set the next cost to infinite for finished utterances (they will be replaced)
+            # by other utterances in the beam
             flat_next_costs = next_costs.flatten()
          
         voc_size = next_costs.shape[1]

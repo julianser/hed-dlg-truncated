@@ -38,7 +38,7 @@ def greedy_match(fileone, filetwo, w2v):
     res2 = greedy_score(filetwo, fileone, w2v)
     res_sum = (res1 + res2)/2.0
 
-    return np.mean(res_sum), np.std(res_sum)
+    return np.mean(res_sum), 1.96*np.std(res_sum)/float(len(res_sum)), np.std(res_sum)
 
 
 def greedy_score(fileone, filetwo, w2v):
@@ -135,7 +135,7 @@ def extrema_score(fileone, filetwo, w2v):
         scores.append(o)
 
     scores = np.asarray(scores)
-    return np.mean(scores), np.std(scores)
+    return np.mean(scores), 1.96*np.std(scores)/float(len(scores)), np.std(scores)
 
 
 def average(fileone, filetwo, w2v):
@@ -175,7 +175,7 @@ def average(fileone, filetwo, w2v):
         scores.append(o)
 
     scores = np.asarray(scores)
-    return np.mean(scores), np.std(scores)
+    return np.mean(scores), 1.96*np.std(scores)/float(len(scores)), np.std(scores)
 
 
 if __name__ == "__main__":
@@ -189,11 +189,11 @@ if __name__ == "__main__":
     w2v = Word2Vec.load_word2vec_format(args.embeddings, binary=True)
 
     r = average(args.ground_truth, args.predicted, w2v)
-    print("Embedding Average Score: %f +/- %f " %(r[0], r[1]))
+    print("Embedding Average Score: %f +/- %f ( %f )" %(r[0], r[1], r[2]))
 
     r = greedy_match(args.ground_truth, args.predicted, w2v)
-    print("Greedy Matching Score: %f +/- %f " %(r[0], r[1]))
+    print("Greedy Matching Score: %f +/- %f ( %f )" %(r[0], r[1], r[2]))
 
     r = extrema_score(args.ground_truth, args.predicted, w2v)
-    print("Extrema Score: %f +/- %f " %(r[0], r[1]))
+    print("Extrema Score: %f +/- %f ( %f )" %(r[0], r[1], r[2]))
 

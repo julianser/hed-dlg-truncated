@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 __docformat__ = 'restructedtext en'
-__authors__ = ("Julian Serban, Alessandro Sordoni")
-__contact__ = "Julian Serban <julianserban@gmail.com>"
+__authors__ = ("Iulian Serban, Alessandro Sordoni")
+__contact__ = "Iulian Serban <julianserban@gmail.com>"
 
 import argparse
 import cPickle
@@ -103,7 +103,7 @@ def main():
     #sampler = search.RandomSampler(model)
     sampler = search.BeamSampler(model)
 
-    # Start chat loop    
+    # Start chat loop
     utterances = collections.deque()
     
     while (True):
@@ -114,10 +114,10 @@ def main():
        while len(utterances) > 0:
            utterances.popleft()
          
-       current_utterance = [ model.end_sym_sentence ] + ['<first_speaker>'] + var.split() + [ model.end_sym_sentence ]
+       current_utterance = [ model.end_sym_utterance ] + ['<first_speaker>'] + var.split() + [ model.end_sym_utterance ]
        utterances.append(current_utterance)
          
-       #TODO Sample a random reply. To spicy it up, we could pick the longest reply or the reply with the fewest placeholders...
+       #TODO Sample a random reply. To spice it up, we could pick the longest reply or the reply with the fewest placeholders...
        seqs = list(itertools.chain(*utterances))
 
        #TODO Retrieve only replies which are generated for second speaker...

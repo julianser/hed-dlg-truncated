@@ -30,7 +30,7 @@ def safe_pickle(obj, filename):
 
 import argparse
 parser = argparse.ArgumentParser()
-parser.add_argument("input", type=str, help="Dialogue file; assumed shuffled with one document (e.g. movie, or Twitter conversation) per line")
+parser.add_argument("input", type=str, help="Dialogue file; assumed shuffled with one document (e.g. one movie dialogue, or one Twitter conversation or one Ubuntu conversation) per line")
 parser.add_argument("--cutoff", type=int, default=-1, help="Vocabulary cutoff (optional)")
 parser.add_argument("--dict", type=str, default="", help="External dictionary (pkl file)")
 parser.add_argument("output", type=str, help="Prefix of the pickle binarized dialogue corpus")
@@ -128,7 +128,7 @@ for line, dialogue in enumerate(open(args.input, 'r')):
     num_terms += len(dialogue_words)
 
     # Compute document frequency statistics
-    unique_word_indices = set(dialogue_words)
+    unique_word_indices = set(dialogue_word_ids)
     for word_id in unique_word_indices:
         df[word_id] += 1
 
@@ -138,10 +138,6 @@ for line, dialogue in enumerate(open(args.input, 'r')):
 safe_pickle(binarized_corpus, args.output + ".dialogues.pkl")
 
 if args.dict == "":
-     # HACK
-     #raw_dict = [(word, word_id, freqs[word_id], df[word_id]) for word, word_id in vocab.items()]
-     #noise_probs = [x[2] for x in sorted(raw_dict, key=operator.itemgetter(1))]
-     #print 'noise_probs', noise_probs
      safe_pickle([(word, word_id, freqs[word_id], df[word_id]) for word, word_id in vocab.items()], args.output + ".dict.pkl")
 
 logger.info("Number of unknowns %d" % unknowns)

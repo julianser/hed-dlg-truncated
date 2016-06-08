@@ -40,6 +40,12 @@ class SSFetcher(threading.Thread):
 
                 index = self.indexes[offset]
                 s = diter.data[index]
+
+                # Flatten if this is a list of lists
+                if len(s) > 0:
+                    if isinstance(s[0], list):
+                        s = [item for sublist in s for item in sublist]
+
                 offset += 1
 
                 # Append only if it is shorter than max_len
@@ -57,7 +63,7 @@ class SSIterator(object):
     def __init__(self,
                  dialogue_file,
                  batch_size,
-                 seed=1234,
+                 seed,
                  max_len=-1,
                  use_infinite_loop=True,
                  dtype="int32"):

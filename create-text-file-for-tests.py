@@ -63,6 +63,10 @@ def parse_args():
             type=int, default=-1,
             help="Number of words in context (if there are more, the beginning of the context will be truncated)")
 
+    parser.add_argument("--leave_out_short_dialogues", action='store_true', help="If enabled, dialogues which have fewer than (1+utterances_to_predict) will be left out. This ensures that the model is always conditioning on some context.")
+
+
+
     return parser.parse_args()
 
 def main():
@@ -104,7 +108,9 @@ def main():
                     utterances += [current_utterance]
                     current_utterance = []
 
-
+            if args.leave_out_short_dialogues:
+                if len(utterances) <= utterances_to_predict+1:
+                    continue
 
             context_utterances = []
             prediction_utterances = []
@@ -137,9 +143,13 @@ def main():
             current_utterance = []
             for word in test_dialogue.split():
                 current_utterance += [word]
-                if word == state['end_sym_sentence']:
+                if word == state['end_sym_utterance']:
                     utterances += [current_utterance]
                     current_utterance = []
+
+            if args.leave_out_short_dialogues:
+                if len(utterances) <= utterances_to_predict+1:
+                    continue
 
             context_utterances = []
             prediction_utterances = []
