@@ -1494,7 +1494,10 @@ class DialogEncoderDecoder(Model):
             if self.add_latent_gaussian_per_utterance:
                 self.encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, \
                              self.x_max_length], \
-                             outputs=[h, hs_and_h_future, latent_utterance_variable_approx_posterior_mean], on_unused_input='warn', name="encoder_fn")
+                             outputs=[h, hs_complete], on_unused_input='warn', name="encoder_fn")
+                #self.encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, \
+                #             self.x_max_length], \
+                #             outputs=[h, hs_complete, hs_and_h_future, latent_utterance_variable_approx_posterior_mean], on_unused_input='warn', name="encoder_fn")
             else:
                 self.encoder_fn = theano.function(inputs=[self.x_data, self.x_data_reversed, \
                              self.x_max_length], \
