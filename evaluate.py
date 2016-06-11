@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 """
+
+OBSOLETE! This script is not supported right now!
+
 Evaluation script.
 
 For paper submissions, this script should normally be run with flags and both with and without the flag --exclude-stop-words.
 
-
 Run example:
 
-THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32,allow_gc=True,scan.allow_gc=False,nvcc.flags=-use_fast_math python evaluate.py Output/1432724394.9_MovieScriptModel --document_ids Data/Test_Shuffled_Dataset_Labels.txt &> Test_Eval_Output.txt
+THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32,allow_gc=True,scan.allow_gc=False,nvcc.flags=-use_fast_math python evaluate.py Output/1432724394.9_MovieScriptModel &> Test_Eval_Output.txt
 
 """
 
