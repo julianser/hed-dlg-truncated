@@ -52,7 +52,7 @@ If you have Theano with GPU installed (bleeding edge version), you can train the
 where &lt;prototype_name&gt; is a state (model architecture) defined inside state.py.
 Training a model to convergence on a modern GPU on the Ubuntu Dialogue Corpus with 46 million tokens takes about 1-2 weeks. If your GPU runs out of memory, you can adjust the bs (batch size) parameter in the model state, but training will be slower. You can also play around with the other parameters inside state.py.
 
-To test a model w.r.t. word perplexity run:
+(CURRENTLY NOT SUPPORTED) To test a model w.r.t. word perplexity run:
 
     THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python evaluate.py <model_name> Model_Evaluation.txt
 
