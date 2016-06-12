@@ -91,9 +91,9 @@ The pre-processed Ubuntu Dialogue Corpus and model responses used by Serban et a
 
 The original Ubuntu Dialogue Corpus as released by Lowe et al. (2015) can be found here: http://cs.mcgill.ca/~jpineau/datasets/ubuntu-corpus-1.0/
 
-Unfortunately due to Twitter's terms of service we are not allowed to distribute Twitter content. Therefore we can only make available the tweet IDs, which can then be used with the Twitter API to build a similar dataset. The tweet Ids can be found here: http://www.iulianserban.com/Files/TweetIDs.zip.
+Unfortunately due to Twitter's terms of service we are not allowed to distribute Twitter content. Therefore we can only make available the tweet IDs, which can then be used with the Twitter API to build a similar dataset. The tweet IDs and model test responses can be found here: http://www.iulianserban.com/Files/TwitterDialogueCorpus.zip.
 
-The MovieTriples script is also available for research purposes only by contacting Iulian Vlad Serban by email, although we strongly recommend researchers to benchmark their models on the Ubuntu and Twitter dialogue corpora, since these datasets are substantially larger and represent more well-defined tasks.
+The MovieTriples script is also available for research purposes only by contacting Iulian Vlad Serban by email, although we strongly recommend researchers to benchmark their models on Ubuntu and Twitter, since these datasets are substantially larger and represent more well-defined tasks.
 
 ### References
 

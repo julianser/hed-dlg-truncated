@@ -398,6 +398,48 @@ def prototype_twitter_HRED():
     return state
 
 
+# Twitter HRED model, where context biases decoder using standard MLP.
+def prototype_twitter_HRED_StandardBias():
+    state = prototype_state()
+
+    # Fill your paths here!
+    state['train_dialogues'] = "../TwitterData/Training.dialogues.pkl"
+    state['test_dialogues'] = "../TwitterData/Test.dialogues.pkl"
+    state['valid_dialogues'] = "../TwitterData/Validation.dialogues.pkl"
+    state['dictionary'] = "../TwitterData/Dataset.dict.pkl"
+    state['save_dir'] = "Output"
+
+    state['max_grad_steps'] = 80
+
+    state['valid_freq'] = 5000
+
+    state['prefix'] = "TwitterModel_"
+    state['updater'] = 'adam'
+
+    state['bidirectional_utterance_encoder'] = True
+
+    state['deep_dialogue_input'] = True
+    state['deep_out'] = True
+
+    state['bs'] = 80 # If out of memory, modify this!
+    state['decoder_bias_type'] = 'all' # Choose between 'first', 'all' and 'selective'
+    state['direct_connection_between_encoders_and_decoder'] = False
+    state['deep_direct_connection'] = False
+
+    state['reset_utterance_decoder_at_end_of_utterance'] = True
+    state['reset_utterance_encoder_at_end_of_utterance'] = True
+    state['lr'] = 0.0002
+
+    state['qdim_encoder'] = 1000
+    state['qdim_decoder'] = 1000
+    state['sdim'] = 1000
+    state['rankdim'] = 400
+
+    state['utterance_decoder_gating'] = 'LSTM'
+
+    return state
+
+
 
 # Twitter VHRED model used in "A Hierarchical Latent Variable Encoder-Decoder Model for Generating Dialogues"
 # by Serban et al. (2016). Note, this model was pretrained as the HRED model with state 'prototype_twitter_HRED'!
@@ -440,6 +482,65 @@ def prototype_twitter_VHRED():
     state['rankdim'] = 400
 
     state['utterance_decoder_gating'] = 'GRU'
+
+
+    state['add_latent_gaussian_per_utterance'] = True
+    state['latent_gaussian_per_utterance_dim'] = 100
+
+
+    state['scale_latent_variable_variances'] = 0.1
+    state['condition_latent_variable_on_dialogue_encoder'] = True
+    state['train_latent_gaussians_with_kl_divergence_annealing'] = True
+    state['kl_divergence_annealing_rate'] = 1.0/60000.0
+    state['decoder_drop_previous_input_tokens'] = True
+    state['decoder_drop_previous_input_tokens_rate'] = 0.75
+
+    state['patience'] = 20
+
+    return state
+
+
+# Twitter VHRED model, where context biases decoder using standard MLP.
+# Note, this model should be pretrained as HRED model.
+def prototype_twitter_VHRED_StandardBias():
+    state = prototype_state()
+
+    # Fill your paths here!
+    state['train_dialogues'] = "../TwitterData/Training.dialogues.pkl"
+    state['test_dialogues'] = "../TwitterData/Test.dialogues.pkl"
+    state['valid_dialogues'] = "../TwitterData/Validation.dialogues.pkl"
+    state['dictionary'] = "../TwitterData/Dataset.dict.pkl"
+    state['save_dir'] = "Output"
+
+    state['max_grad_steps'] = 80
+
+    state['valid_freq'] = 5000
+
+    state['prefix'] = "TwitterModel_"
+    state['updater'] = 'adam'
+
+    state['bidirectional_utterance_encoder'] = True
+
+
+
+    state['deep_dialogue_input'] = True
+    state['deep_out'] = True
+
+    state['bs'] = 80
+    state['decoder_bias_type'] = 'all' # Choose between 'first', 'all' and 'selective'
+    state['direct_connection_between_encoders_and_decoder'] = False
+    state['deep_direct_connection'] = False
+
+    state['reset_utterance_decoder_at_end_of_utterance'] = True
+    state['reset_utterance_encoder_at_end_of_utterance'] = True
+    state['lr'] = 0.0002
+
+    state['qdim_encoder'] = 1000
+    state['qdim_decoder'] = 1000
+    state['sdim'] = 1000
+    state['rankdim'] = 400
+
+    state['utterance_decoder_gating'] = 'LSTM'
 
 
     state['add_latent_gaussian_per_utterance'] = True
