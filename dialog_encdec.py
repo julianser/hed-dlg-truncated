@@ -48,7 +48,7 @@ class EncoderDecoderBase():
 class UtteranceEncoder(EncoderDecoderBase):
     """
     This is the GRU-gated RNN encoder class, which operates on hidden states at the word level (intra-utterance level).
-    It encodes utterances into a real-valued fixed-sized vectors.
+    It encodes utterances into real-valued fixed-sized vectors.
     """
 
     def init_params(self, word_embedding_param):
@@ -205,7 +205,7 @@ class UtteranceEncoder(EncoderDecoderBase):
 class DCGMEncoder(EncoderDecoderBase):
     """
     This is the bag-of-words (DCGM) RNN encoder class, which operates on hidden states at the word level (intra-utterance level).
-    It encodes utterances into a real-valued fixed-sized vectors.
+    It encodes utterances into real-valued fixed-sized vectors.
     """
 
     def init_params(self, word_embedding_param):
