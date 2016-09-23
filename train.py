@@ -117,7 +117,7 @@ def main(args):
                 logger.debug("Found model to automatically resume: %s" % resume_filename)
                 auto_restarting = True
                 # Setup training to automatically resume training with the model found
-                args.resume = resume_filename
+                args.resume = resume_filename + '__auto'
                 # Disable training from reinitialization any parameters
                 args.reinitialize_decoder_parameters = False
                 args.reinitialize_latent_variable_parameters = False
