@@ -13,7 +13,7 @@ import cPickle
 import logging
 logger = logging.getLogger(__name__)
 
-from theano.sandbox.scan import scan
+from theano import scan
 from theano.sandbox.rng_mrg import MRG_RandomStreams
 from theano.tensor.nnet.conv3d2d import *
 
@@ -869,6 +869,7 @@ class UtteranceDecoder(EncoderDecoderBase):
         if (not self.collaps_to_standard_rnn) and (self.reset_utterance_decoder_at_end_of_utterance):
             hd_tm1 = (m_t) * hd_tm1 + (1 - m_t) * T.tanh(T.dot(decoder_inp_t, self.Wd_s_0) + self.bd_s_0)
 
+
         # Unlike the GRU gating function, the LSTM gating function needs to keep track of two vectors:
         # the output state and the cell state. To align the implementation with the GRU, we store 
         # both of these two states in a single vector for every time step, split them up for computation and
@@ -947,7 +948,7 @@ class UtteranceDecoder(EncoderDecoderBase):
         # then never reset decoder. Otherwise, reset the decoder at every utterance turn.
         if (not self.collaps_to_standard_rnn) and (self.reset_utterance_decoder_at_end_of_utterance):
             hd_tm1 = (m_t) * hd_tm1 + (1 - m_t) * T.tanh(T.dot(decoder_inp_t, self.Wd_s_0) + self.bd_s_0)
-  
+
         # In the 'selective' decoder bias type each hidden state of the decoder
         # RNN receives the decoder_inp_t modified by the selective bias -> decoder_inpr_t 
         if self.decoder_bias_type == 'selective':
@@ -1491,13 +1492,10 @@ class DialogEncoderDecoder(Model):
                 latent_utterance_variable_approx_posterior_mean = _posterior_out[1]
                 latent_utterance_variable_approx_posterior_var = _posterior_out[2]
 
-            #
-            # NEW STUFF BEGIN
-            #
             training_y = self.x_data[1:self.x_max_length]
             if self.direct_connection_between_encoders_and_decoder:
                 logger.debug("Build dialog dummy encoder")
-                hs_dummy = self.dialog_dummy_encoder.build_encoder(h, self.x_data, xmask=training_hs_mask)
+                hs_dummy = self.dialog_dummy_encoder.build_encoder(h, self.x_data, xmask=T.neq(self.x_data, self.eos_sym))
 
                 logger.debug("Build decoder (NCE) with direct connection from encoder(s)")
                 if self.add_latent_gaussian_per_utterance:
@@ -1508,7 +1506,7 @@ class DialogEncoderDecoder(Model):
                 else:
                     hd_input = T.concatenate([hs, hs_dummy], axis=2)
 
-                _, hd, _, _ = self.utterance_decoder.build_decoder(hd_input, self.x_data, y=training_y, mode=UtteranceDecoder.EVALUATION, prev_state=self.phd)
+                _, hd, _, _ = self.utterance_decoder.build_decoder(hd_input, self.x_data, y=training_y, mode=UtteranceDecoder.EVALUATION)
 
             else:
                 if self.add_latent_gaussian_per_utterance:
@@ -1520,11 +1518,7 @@ class DialogEncoderDecoder(Model):
                     hd_input = hs
 
                 logger.debug("Build decoder (EVAL)")
-                _, hd, _, _ = self.utterance_decoder.build_decoder(hd_input, self.x_data, y=training_y, mode=UtteranceDecoder.EVALUATION, prev_state=self.phd)
-
-            #
-            # NEW STUFF END
-            #
+                _, hd, _, _ = self.utterance_decoder.build_decoder(hd_input, self.x_data, y=training_y, mode=UtteranceDecoder.EVALUATION)
 
 
 
