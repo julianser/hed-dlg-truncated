@@ -564,7 +564,7 @@ def prototype_twitter_VHRED_StandardBias():
 def prototype_ubuntu_LSTM():
     state = prototype_state()
 
-    state['end_sym_sentence'] = '__eot__'
+    state['end_sym_utterance'] = '__eot__'
 
     state['unk_sym'] = 0 # Unknown word token <unk>
     state['eos_sym'] = 1 # end-of-utterance symbol </s>
@@ -621,7 +621,7 @@ def prototype_ubuntu_LSTM():
 def prototype_ubuntu_HRED():
     state = prototype_state()
 
-    state['end_sym_sentence'] = '__eot__'
+    state['end_sym_utterance'] = '__eot__'
 
     state['unk_sym'] = 0 # Unknown word token <unk>
     state['eos_sym'] = 1 # end-of-utterance symbol </s>
@@ -673,7 +673,7 @@ def prototype_ubuntu_HRED():
 def prototype_ubuntu_VHRED():
     state = prototype_state()
 
-    state['end_sym_sentence'] = '__eot__'
+    state['end_sym_utterance'] = '__eot__'
 
     state['unk_sym'] = 0 # Unknown word token <unk>
     state['eos_sym'] = 1 # end-of-utterance symbol </s>
