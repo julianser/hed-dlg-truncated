@@ -148,7 +148,7 @@ class Sampler(object):
             ones_mask = numpy.zeros((context.shape[0], self.model.bs), dtype='float32')
 
             # Computes new utterance decoder hidden states (including intermediate utterance encoder and dialogue encoder hidden states)
-            new_hd = self.compute_decoder_encoding(enlarged_context, enlarged_reversed_context, self.max_len, zero_mask, zero_mask, numpy.zeros((self.model.bs), dtype='float32'), ran_vector, ones_mask)
+            new_hd = self.compute_decoder_encoding(enlarged_context, enlarged_reversed_context, self.max_len, zero_mask, numpy.zeros((self.model.bs), dtype='float32'), ran_vector, ones_mask)
             prev_hd[:] = new_hd[0][-1][0:context.shape[1], :]
 
 
